@@ -1,10 +1,8 @@
-// Main app shell — "Find the Spot" and "Evaluate a Spot" modes
+// Main app shell
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Button } from '@/components/ui/button';
 import PersonInput from '@/components/PersonInput';
 import VenueCard from '@/components/VenueCard';
 import TravelTimeGrid from '@/components/TravelTimeGrid';
@@ -17,7 +15,7 @@ import type { RouteFeature } from '@/components/Map';
 
 const Map = dynamic(() => import('@/components/Map'), { ssr: false });
 
-const PERSON_COLORS = ['#ef4444', '#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#ec4899'];
+const PERSON_COLORS = ['#E8573D', '#7C5CFC', '#3AAFB9', '#F5A623', '#E84393', '#34D399'];
 
 function createPerson(index: number): Person {
   return {
@@ -39,20 +37,12 @@ interface CandidateDetail {
 }
 
 const STAGE_LABELS: Record<string, string> = {
-  prefilter: 'Analyzing locations and filtering candidates...',
+  prefilter: 'Analyzing locations...',
   travel_times: 'Calculating travel times...',
-  scoring: 'Scoring and ranking candidates...',
-  venues: 'Finding nearby restaurants, bars, and cafes...',
+  scoring: 'Scoring candidates...',
+  venues: 'Finding nearby spots...',
   done: 'Done!',
 };
-
-function formatTime(seconds: number): string {
-  const mins = Math.round(seconds / 60);
-  if (mins < 60) return `${mins}m`;
-  const hrs = Math.floor(mins / 60);
-  const rem = mins % 60;
-  return rem > 0 ? `${hrs}h ${rem}m` : `${hrs}h`;
-}
 
 export default function Home() {
   const [people, setPeople] = useState<Person[]>([createPerson(0), createPerson(1)]);
@@ -70,6 +60,7 @@ export default function Home() {
   const [outlierIndex, setOutlierIndex] = useState<number | null>(null);
   const [usedHeuristic, setUsedHeuristic] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   const addPerson = () => {
@@ -104,7 +95,6 @@ export default function Home() {
     const validPeople = people.filter((p) => p.lat !== 0 && p.lng !== 0);
     if (validPeople.length < 2) return;
 
-    // Abort previous request
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -179,22 +169,18 @@ export default function Home() {
               setCandidateDetails(cd);
               setUsedHeuristic(msg.usedHeuristic ?? false);
 
-              // Check for outlier
               if (r?.[0]?.times) {
                 setOutlierIndex(detectOutlier(r[0].times));
               }
 
-              // Fetch routes to the top venue (or top hotspot candidate as fallback)
               const topVenue = v?.[0];
               const topCandidate = cd.find((c) => c.hotspotId === r?.[0]?.hotspotId);
               const routeDest = topVenue ?? topCandidate;
               if (routeDest) {
-                // Auto-select the top result so route times show in its card
                 if (topVenue) setSelectedVenueId(topVenue.placeId);
                 else if (topCandidate) setSelectedVenueId(topCandidate.hotspotId);
                 fetchRoutes(validPeople, routeDest, departureTime);
 
-                // Also fetch isochrones for non-transit users
                 const nonTransit = validPeople.find((p) => p.mode !== 'transit');
                 if (nonTransit) {
                   fetch('/api/isochrones', {
@@ -234,7 +220,6 @@ export default function Home() {
     }
   };
 
-  // Fetch route polylines from each person to a destination
   const fetchRoutes = async (
     ppl: Person[],
     dest: { lat: number; lng: number },
@@ -266,7 +251,6 @@ export default function Home() {
     }
   };
 
-  // Refetch routes when user selects a different venue
   const handleSelectVenue = (venueId: string) => {
     setSelectedVenueId(venueId);
     const venue = displayItems.find((v) => v.placeId === venueId);
@@ -286,9 +270,10 @@ export default function Home() {
     const encoded = encodeState(state);
     const url = `${window.location.origin}/m?s=${encoded}`;
     navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
-  // Build display items: venues with travel times, or ranked neighborhoods as fallback
   const displayItems = buildDisplayItems(rankings, venues, candidateDetails, people, routes, selectedVenueId);
   const validCount = people.filter((p) => p.lat !== 0 && p.lng !== 0).length;
   const hasResults = displayItems.length > 0;
@@ -296,137 +281,144 @@ export default function Home() {
   return (
     <div className="flex h-screen flex-col lg:flex-row overflow-hidden">
       {/* Sidebar */}
-      <div className="flex w-full flex-col gap-4 overflow-y-auto border-r p-4 lg:h-screen lg:w-[420px] lg:shrink-0">
+      <div className="flex w-full flex-col gap-5 overflow-y-auto p-5 lg:h-screen lg:w-[440px] lg:shrink-0 bg-background">
+        {/* Header */}
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold tracking-tight">Midpoint</h1>
+          <h1 className="text-2xl font-bold tracking-tight gradient-text">midpoint</h1>
           {hasResults && (
-            <Button variant="outline" size="sm" onClick={shareLink}>
-              Share
-            </Button>
+            <button
+              onClick={shareLink}
+              className="flex items-center gap-1.5 rounded-xl bg-muted/60 px-3.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted transition-colors"
+            >
+              {copied ? (
+                <>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                  Copied!
+                </>
+              ) : (
+                <>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+                  Share
+                </>
+              )}
+            </button>
           )}
         </div>
 
-        <Tabs defaultValue="find">
-          <TabsList className="w-full">
-            <TabsTrigger value="find" className="flex-1">Find the Spot</TabsTrigger>
-            <TabsTrigger value="evaluate" className="flex-1">Evaluate a Spot</TabsTrigger>
-          </TabsList>
+        <p className="text-sm text-muted-foreground -mt-2">
+          Find the fairest meeting spot for your group.
+        </p>
 
-          <TabsContent value="find" className="mt-4 space-y-4">
-            {/* People inputs */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium">Who&apos;s coming?</label>
-                {people.length < 6 && (
-                  <Button variant="ghost" size="sm" onClick={addPerson} className="h-7 text-xs">
-                    + Add person
-                  </Button>
-                )}
-              </div>
-              {people.map((person, i) => (
-                <PersonInput
-                  key={person.id}
-                  person={person}
-                  onUpdate={(p) => updatePerson(i, p)}
-                  onRemove={() => removePerson(i)}
-                  canRemove={people.length > 2}
-                />
-              ))}
-              <p className="text-xs text-muted-foreground">
-                Tip: click the map to set a person&apos;s location
-              </p>
+        {/* People */}
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-semibold">Who&apos;s coming?</label>
+            {people.length < 6 && (
+              <button
+                onClick={addPerson}
+                className="rounded-xl bg-muted/50 px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              >
+                + Add person
+              </button>
+            )}
+          </div>
+          {people.map((person, i) => (
+            <PersonInput
+              key={person.id}
+              person={person}
+              onUpdate={(p) => updatePerson(i, p)}
+              onRemove={() => removePerson(i)}
+              canRemove={people.length > 2}
+            />
+          ))}
+          <p className="text-[11px] text-muted-foreground/60 pl-1">
+            Click the map to set a location
+          </p>
+        </div>
+
+        <div className="h-px bg-border/60" />
+
+        <DepartureTimePicker value={departureTime} onChange={setDepartureTime} />
+        <ObjectiveSlider alpha={alpha} onChange={setAlpha} />
+
+        {/* Find button */}
+        <button
+          className="w-full h-12 rounded-2xl bg-gradient-to-r from-primary to-primary/85 text-base font-semibold text-white shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/25 hover:brightness-105 disabled:opacity-50 disabled:pointer-events-none transition-all active:scale-[0.98]"
+          onClick={findMidpoint}
+          disabled={validCount < 2 || isLoading}
+        >
+          {isLoading
+            ? 'Finding...'
+            : validCount < 2
+            ? `Add ${2 - validCount} more location${2 - validCount > 1 ? 's' : ''}`
+            : 'Find the spot'}
+        </button>
+
+        {/* Loading stages */}
+        {isLoading && (
+          <div className="rounded-2xl border border-border/40 bg-card p-4 shadow-sm">
+            <LoadingStages currentStage={loadingStage} />
+            <p className="mt-2 text-xs text-muted-foreground animate-pulse">{loadingDetail}</p>
+          </div>
+        )}
+
+        {/* Error */}
+        {error && (
+          <div className="rounded-2xl bg-red-50 border border-red-100 p-3.5 text-sm text-red-700 font-medium">
+            {error}
+          </div>
+        )}
+
+        {/* Outlier warning */}
+        {outlierIndex !== null && (
+          <div className="rounded-2xl bg-amber-50 border border-amber-100 p-3.5 text-sm text-amber-700">
+            <strong>{people[outlierIndex]?.label ?? 'Someone'}</strong> has a
+            significantly longer commute.
+          </div>
+        )}
+
+        {/* Heuristic notice */}
+        {hasResults && usedHeuristic && (
+          <div className="rounded-2xl bg-violet-50 border border-violet-100 p-3 text-xs text-violet-600">
+            Times are estimates. Real-time data requires a Google Maps API key.
+          </div>
+        )}
+
+        {/* Results */}
+        {hasResults && !isLoading && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-semibold">
+                Top spots
+              </h2>
+              <span className="rounded-lg bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+                {displayItems.length} found
+              </span>
             </div>
+            {displayItems.slice(0, 5).map((item, i) => (
+              <VenueCard
+                key={item.placeId}
+                venue={item}
+                people={people.filter((p) => p.lat !== 0 && p.lng !== 0)}
+                rank={i + 1}
+                isSelected={item.placeId === selectedVenueId}
+                onClick={() => handleSelectVenue(item.placeId)}
+              />
+            ))}
 
-            <DepartureTimePicker value={departureTime} onChange={setDepartureTime} />
-            <ObjectiveSlider alpha={alpha} onChange={setAlpha} />
-
-            {/* Find button */}
-            <Button
-              className="w-full"
-              size="lg"
-              onClick={findMidpoint}
-              disabled={validCount < 2 || isLoading}
-            >
-              {isLoading
-                ? 'Finding...'
-                : `Find the spot${validCount < 2 ? ` (need ${2 - validCount} more)` : ''}`}
-            </Button>
-
-            {/* Loading stages */}
-            {isLoading && (
-              <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
-                <LoadingStages currentStage={loadingStage} />
-                <p className="text-xs text-muted-foreground animate-pulse">{loadingDetail}</p>
-              </div>
+            {displayItems.length > 5 && (
+              <TravelTimeGrid
+                people={people.filter((p) => p.lat !== 0 && p.lng !== 0)}
+                venues={displayItems}
+                selectedVenueId={selectedVenueId}
+                onSelectVenue={handleSelectVenue}
+              />
             )}
+          </div>
+        )}
 
-            {/* Error */}
-            {error && (
-              <div className="rounded-md bg-red-50 p-3 text-sm text-red-800">{error}</div>
-            )}
-
-            {/* Outlier warning */}
-            {outlierIndex !== null && (
-              <div className="rounded-md bg-amber-50 p-3 text-sm text-amber-800">
-                <strong>{people[outlierIndex]?.label ?? 'Someone'}</strong> has a
-                significantly longer travel time than the rest of the group.
-              </div>
-            )}
-
-            {/* Heuristic notice */}
-            {hasResults && usedHeuristic && (
-              <div className="rounded-md bg-blue-50 p-3 text-xs text-blue-700">
-                Travel times are estimates. Connect a Google Maps API key for real-time data.
-              </div>
-            )}
-
-            {/* Results */}
-            {hasResults && !isLoading && (
-              <div className="space-y-3">
-                <h2 className="text-sm font-medium">
-                  Top spots ({displayItems.length} found)
-                </h2>
-                {displayItems.slice(0, 5).map((item, i) => (
-                  <VenueCard
-                    key={item.placeId}
-                    venue={item}
-                    people={people.filter((p) => p.lat !== 0 && p.lng !== 0)}
-                    rank={i + 1}
-                    isSelected={item.placeId === selectedVenueId}
-                    onClick={() => handleSelectVenue(item.placeId)}
-                  />
-                ))}
-
-                {displayItems.length > 5 && (
-                  <TravelTimeGrid
-                    people={people.filter((p) => p.lat !== 0 && p.lng !== 0)}
-                    venues={displayItems}
-                    selectedVenueId={selectedVenueId}
-                    onSelectVenue={handleSelectVenue}
-                  />
-                )}
-              </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="evaluate" className="mt-4 space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Have a spot in mind? Drop a pin on the map and we&apos;ll show
-              everyone&apos;s travel time to that location.
-            </p>
-            <div className="space-y-2">
-              {people.map((person, i) => (
-                <PersonInput
-                  key={person.id}
-                  person={person}
-                  onUpdate={(p) => updatePerson(i, p)}
-                  onRemove={() => removePerson(i)}
-                  canRemove={people.length > 2}
-                />
-              ))}
-            </div>
-          </TabsContent>
-        </Tabs>
+        {/* Bottom spacer */}
+        <div className="h-4" />
       </div>
 
       {/* Map */}
@@ -455,7 +447,6 @@ function buildDisplayItems(
 ): Venue[] {
   if (rankings.length === 0) return [];
 
-  // Build route-based travel times for the selected venue (most accurate, uses current modes)
   const validPeople = people.filter((p) => p.lat !== 0 && p.lng !== 0);
   let routeTimesForSelected: number[] | null = null;
   if (selectedVenueId && routes.length > 0) {
@@ -463,21 +454,17 @@ function buildDisplayItems(
       const route = routes.find((r) => r.personId === p.id);
       return route?.durationSeconds ?? 0;
     });
-    // Only use if we got valid times for all people
     if (routeTimesForSelected.some((t) => t === 0)) {
       routeTimesForSelected = null;
     }
   }
 
-  // If we have venues, attach travel times from the nearest ranking
   if (venues.length > 0) {
     return venues.slice(0, 10).map((venue) => {
-      // For the selected venue, prefer route-based times (reflects current transport modes)
       if (venue.placeId === selectedVenueId && routeTimesForSelected) {
         return { ...venue, travelTimes: routeTimesForSelected };
       }
 
-      // Find closest ranking candidate
       let bestRanking = rankings[0];
       let bestDist = Infinity;
       for (const r of rankings) {
@@ -493,7 +480,6 @@ function buildDisplayItems(
     });
   }
 
-  // Fallback: show ranked neighborhoods as pseudo-venues
   return rankings.slice(0, 10).map((r) => {
     const cd = candidateDetails.find((c) => c.hotspotId === r.hotspotId);
     const isSelected = r.hotspotId === selectedVenueId;
@@ -511,7 +497,7 @@ function buildDisplayItems(
   });
 }
 
-// Loading stage indicator component
+// Loading stage indicator
 function LoadingStages({ currentStage }: { currentStage: string }) {
   const stages = [
     { key: 'prefilter', label: 'Pre-filtering hotspots' },
@@ -523,21 +509,25 @@ function LoadingStages({ currentStage }: { currentStage: string }) {
   const currentIndex = stages.findIndex((s) => s.key === currentStage);
 
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       {stages.map((stage, i) => {
         const isActive = stage.key === currentStage;
         const isDone = i < currentIndex || currentStage === 'done';
 
         return (
-          <div key={stage.key} className="flex items-center gap-2 text-sm">
-            <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs ${
-              isDone ? 'bg-green-100 text-green-700' :
-              isActive ? 'bg-primary text-primary-foreground animate-pulse' :
-              'bg-muted text-muted-foreground'
+          <div key={stage.key} className="flex items-center gap-2.5 text-sm">
+            <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-all ${
+              isDone ? 'bg-emerald-100 text-emerald-600' :
+              isActive ? 'bg-primary text-white animate-pulse-dot shadow-sm shadow-primary/30' :
+              'bg-muted text-muted-foreground/50'
             }`}>
-              {isDone ? '✓' : i + 1}
+              {isDone ? (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+              ) : (
+                i + 1
+              )}
             </span>
-            <span className={isDone ? 'text-muted-foreground line-through' : isActive ? 'font-medium' : 'text-muted-foreground'}>
+            <span className={`text-sm ${isDone ? 'text-muted-foreground' : isActive ? 'font-medium text-foreground' : 'text-muted-foreground/50'}`}>
               {stage.label}
             </span>
           </div>

@@ -20,11 +20,11 @@ function formatTime(seconds: number): string {
 
 function cellColor(seconds: number): string {
   const mins = seconds / 60;
-  if (mins <= 15) return 'bg-green-100 text-green-900';
-  if (mins <= 25) return 'bg-emerald-100 text-emerald-900';
-  if (mins <= 35) return 'bg-yellow-100 text-yellow-900';
-  if (mins <= 45) return 'bg-orange-100 text-orange-900';
-  return 'bg-red-100 text-red-900';
+  if (mins <= 15) return 'bg-emerald-50 text-emerald-800';
+  if (mins <= 25) return 'bg-teal-50 text-teal-800';
+  if (mins <= 35) return 'bg-amber-50 text-amber-800';
+  if (mins <= 45) return 'bg-orange-50 text-orange-800';
+  return 'bg-red-50 text-red-800';
 }
 
 export default function TravelTimeGrid({
@@ -36,25 +36,25 @@ export default function TravelTimeGrid({
   if (venues.length === 0 || people.length === 0) return null;
 
   return (
-    <div className="overflow-x-auto rounded-lg border">
+    <div className="overflow-x-auto rounded-2xl border border-border/50 bg-card shadow-sm">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b bg-muted/50">
-            <th className="p-2 text-left text-xs font-medium text-muted-foreground">
+          <tr className="border-b border-border/40">
+            <th className="p-2.5 text-left text-xs font-medium text-muted-foreground">
               Venue
             </th>
             {people.map((p) => (
-              <th key={p.id} className="p-2 text-center text-xs font-medium">
-                <div className="flex flex-col items-center gap-1">
+              <th key={p.id} className="p-2.5 text-center text-xs font-medium">
+                <div className="flex flex-col items-center gap-1.5">
                   <div
-                    className="h-3 w-3 rounded-full"
+                    className="h-3 w-3 rounded-full shadow-sm"
                     style={{ backgroundColor: p.color }}
                   />
-                  <span className="max-w-[4rem] truncate">{p.label}</span>
+                  <span className="max-w-[4rem] truncate text-muted-foreground">{p.label}</span>
                 </div>
               </th>
             ))}
-            <th className="p-2 text-center text-xs font-medium text-muted-foreground">
+            <th className="p-2.5 text-center text-xs font-medium text-muted-foreground">
               Max
             </th>
           </tr>
@@ -70,29 +70,29 @@ export default function TravelTimeGrid({
             return (
               <tr
                 key={venue.placeId}
-                className={`cursor-pointer border-b transition-colors hover:bg-muted/30 ${
+                className={`cursor-pointer border-b border-border/30 transition-colors hover:bg-primary/3 ${
                   isSelected ? 'bg-primary/5' : ''
                 }`}
                 onClick={() => onSelectVenue(venue.placeId)}
               >
-                <td className="max-w-[8rem] truncate p-2 font-medium">
+                <td className="max-w-[8rem] truncate p-2.5 font-medium">
                   {venue.name}
                 </td>
                 {people.map((person, i) => {
                   const time = venue.travelTimes[i];
                   if (time == null) {
                     return (
-                      <td key={person.id} className="p-1 text-center text-xs text-muted-foreground">
+                      <td key={person.id} className="p-1.5 text-center text-xs text-muted-foreground">
                         —
                       </td>
                     );
                   }
                   const isMax = time === maxTime && people.length > 1;
                   return (
-                    <td key={person.id} className="p-1 text-center">
+                    <td key={person.id} className="p-1.5 text-center">
                       <span
-                        className={`inline-block rounded px-1.5 py-0.5 text-xs font-medium ${cellColor(time)} ${
-                          isMax ? 'ring-1 ring-orange-400' : ''
+                        className={`inline-block rounded-lg px-2 py-0.5 text-xs font-semibold ${cellColor(time)} ${
+                          isMax ? 'ring-1 ring-orange-300' : ''
                         }`}
                       >
                         {formatTime(time)}
@@ -100,7 +100,7 @@ export default function TravelTimeGrid({
                     </td>
                   );
                 })}
-                <td className="p-1 text-center text-xs font-medium text-muted-foreground">
+                <td className="p-1.5 text-center text-xs font-semibold text-muted-foreground">
                   {maxTime > 0 ? formatTime(maxTime) : '—'}
                 </td>
               </tr>

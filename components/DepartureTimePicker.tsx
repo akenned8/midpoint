@@ -2,8 +2,6 @@
 'use client';
 
 import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 
 interface DepartureTimePickerProps {
   value: string; // ISO8601 or 'now'
@@ -65,44 +63,47 @@ export default function DepartureTimePicker({
   };
 
   return (
-    <div className="space-y-2">
-      <label className="text-sm font-medium">When are you meeting?</label>
+    <div className="space-y-2.5">
+      <label className="text-sm font-medium">When?</label>
       <div className="flex flex-wrap gap-1.5">
         {presets.map((p) => (
-          <Button
+          <button
             key={p.value}
-            variant={value === p.value ? 'default' : 'outline'}
-            size="sm"
-            className="h-8 text-xs"
+            className={`h-8 rounded-xl px-3.5 text-xs font-medium transition-all ${
+              value === p.value
+                ? 'bg-foreground text-background shadow-sm'
+                : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+            }`}
             onClick={() => {
               onChange(p.value);
               setShowCustom(false);
             }}
           >
             {p.label}
-          </Button>
+          </button>
         ))}
-        <Button
-          variant={!isPreset || showCustom ? 'default' : 'outline'}
-          size="sm"
-          className="h-8 text-xs"
+        <button
+          className={`h-8 rounded-xl px-3.5 text-xs font-medium transition-all ${
+            !isPreset || showCustom
+              ? 'bg-foreground text-background shadow-sm'
+              : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+          }`}
           onClick={() => setShowCustom(true)}
         >
           Custom
-        </Button>
+        </button>
       </div>
 
       {showCustom && (
-        <Input
+        <input
           type="datetime-local"
-          className="h-9 w-auto text-sm"
+          className="h-10 w-auto rounded-xl border border-input bg-muted/30 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
           value={toLocalInput(value)}
           onChange={(e) => {
             if (e.target.value) {
               onChange(new Date(e.target.value).toISOString());
             }
           }}
-          // 15-minute increments
           step={900}
         />
       )}

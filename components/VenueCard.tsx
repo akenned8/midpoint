@@ -1,8 +1,6 @@
 // Single venue result with per-person travel times
 'use client';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import type { Venue, Person } from '@/types';
 
 interface VenueCardProps {
@@ -23,11 +21,19 @@ function formatTime(seconds: number): string {
 
 function timeColor(seconds: number): string {
   const mins = seconds / 60;
-  if (mins <= 15) return 'bg-green-100 text-green-800';
-  if (mins <= 25) return 'bg-emerald-100 text-emerald-800';
-  if (mins <= 35) return 'bg-yellow-100 text-yellow-800';
-  if (mins <= 45) return 'bg-orange-100 text-orange-800';
-  return 'bg-red-100 text-red-800';
+  if (mins <= 15) return 'bg-emerald-50 text-emerald-700';
+  if (mins <= 25) return 'bg-teal-50 text-teal-700';
+  if (mins <= 35) return 'bg-amber-50 text-amber-700';
+  if (mins <= 45) return 'bg-orange-50 text-orange-700';
+  return 'bg-red-50 text-red-700';
+}
+
+function barColor(seconds: number, isMax: boolean): string {
+  if (isMax) return 'bg-gradient-to-r from-orange-300 to-orange-400';
+  const mins = seconds / 60;
+  if (mins <= 20) return 'bg-gradient-to-r from-emerald-300 to-emerald-400';
+  if (mins <= 35) return 'bg-gradient-to-r from-amber-300 to-amber-400';
+  return 'bg-gradient-to-r from-orange-300 to-orange-400';
 }
 
 const PRICE_LABELS = ['Free', '$', '$$', '$$$', '$$$$'];
@@ -46,101 +52,96 @@ export default function VenueCard({
       : 0;
 
   return (
-    <Card
-      className={`cursor-pointer transition-all hover:shadow-md ${
-        isSelected ? 'ring-2 ring-primary' : ''
+    <div
+      className={`cursor-pointer rounded-2xl border bg-card p-4 transition-all hover:shadow-md active:scale-[0.99] ${
+        isSelected
+          ? 'border-primary/30 shadow-md shadow-primary/8 ring-1 ring-primary/20'
+          : 'border-border/50 shadow-sm hover:border-border'
       }`}
       onClick={onClick}
     >
-      <CardHeader className="pb-2">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-2">
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-              {rank}
-            </span>
-            <CardTitle className="text-base">{venue.name}</CardTitle>
+      {/* Header */}
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-2.5">
+          <span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
+            rank === 1
+              ? 'bg-gradient-to-br from-primary to-primary/80 text-white shadow-sm shadow-primary/20'
+              : 'bg-muted text-muted-foreground'
+          }`}>
+            {rank}
+          </span>
+          <h3 className="text-[15px] font-semibold leading-tight">{venue.name}</h3>
+        </div>
+        {venue.rating > 0 && (
+          <div className="flex items-center gap-1 text-sm shrink-0">
+            <span className="text-amber-400">★</span>
+            <span className="font-medium text-foreground/70">{venue.rating.toFixed(1)}</span>
+            {venue.reviewCount > 0 && (
+              <span className="text-xs text-muted-foreground">({venue.reviewCount.toLocaleString()})</span>
+            )}
           </div>
-          {venue.rating > 0 && (
-            <div className="flex items-center gap-1 text-sm text-muted-foreground">
-              <span className="text-amber-500">★</span>
-              <span>{venue.rating.toFixed(1)}</span>
-              {venue.reviewCount > 0 && (
-                <span className="text-xs">({venue.reviewCount})</span>
-              )}
-            </div>
-          )}
-        </div>
-      </CardHeader>
+        )}
+      </div>
 
-      <CardContent className="space-y-3">
-        {/* Venue metadata */}
-        <div className="flex flex-wrap gap-1">
-          {venue.priceLevel != null && (
-            <Badge variant="outline" className="text-xs">
-              {PRICE_LABELS[venue.priceLevel]}
-            </Badge>
-          )}
-          {venue.neighborhood && (
-            <Badge variant="secondary" className="text-xs">
-              {venue.neighborhood}
-            </Badge>
-          )}
-          {venue.types.slice(0, 2).map((t) => (
-            <Badge key={t} variant="secondary" className="text-xs">
-              {t.replace(/_/g, ' ')}
-            </Badge>
-          ))}
-        </div>
+      {/* Tags */}
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        {venue.priceLevel != null && (
+          <span className="inline-flex items-center rounded-lg bg-muted/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+            {PRICE_LABELS[venue.priceLevel]}
+          </span>
+        )}
+        {venue.types.slice(0, 2).map((t) => (
+          <span key={t} className="inline-flex items-center rounded-lg bg-muted/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+            {t.replace(/_/g, ' ')}
+          </span>
+        ))}
+      </div>
 
-        {/* Per-person travel times */}
-        {venue.travelTimes.length > 0 && (
-          <div className="space-y-1.5">
-            {people.map((person, i) => {
-              const time = venue.travelTimes[i];
-              if (time == null) return null;
-              const isMax = time === maxTime && people.length > 1;
-              return (
-                <div key={person.id} className="flex items-center gap-2 text-sm">
-                  <div
-                    className="h-3 w-3 shrink-0 rounded-full"
-                    style={{ backgroundColor: person.color }}
-                  />
-                  <span className="w-16 truncate text-xs text-muted-foreground">
-                    {person.label}
-                  </span>
-                  {/* Travel time bar */}
-                  <div className="flex-1">
-                    <div className="h-4 overflow-hidden rounded-full bg-muted">
-                      <div
-                        className={`h-full rounded-full transition-all ${
-                          isMax ? 'bg-orange-400' : 'bg-primary/70'
-                        }`}
-                        style={{
-                          width: `${Math.min(100, (time / (maxTime * 1.1)) * 100)}%`,
-                        }}
-                      />
-                    </div>
+      {/* Per-person travel times */}
+      {venue.travelTimes.length > 0 && (
+        <div className="space-y-2">
+          {people.map((person, i) => {
+            const time = venue.travelTimes[i];
+            if (time == null) return null;
+            const isMax = time === maxTime && people.length > 1;
+            return (
+              <div key={person.id} className="flex items-center gap-2 text-sm">
+                <div
+                  className="h-3 w-3 shrink-0 rounded-full"
+                  style={{ backgroundColor: person.color }}
+                />
+                <span className="w-14 truncate text-xs text-muted-foreground font-medium">
+                  {person.label}
+                </span>
+                {/* Travel time bar */}
+                <div className="flex-1">
+                  <div className="h-3.5 overflow-hidden rounded-full bg-muted/40">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${barColor(time, isMax)}`}
+                      style={{
+                        width: `${Math.min(100, (time / (maxTime * 1.15)) * 100)}%`,
+                      }}
+                    />
                   </div>
-                  <Badge
-                    variant="outline"
-                    className={`min-w-[3rem] justify-center text-xs ${timeColor(time)}`}
-                  >
-                    {formatTime(time)}
-                  </Badge>
                 </div>
-              );
-            })}
-          </div>
-        )}
+                <span
+                  className={`min-w-[3.2rem] rounded-lg px-2 py-0.5 text-center text-xs font-semibold ${timeColor(time)}`}
+                >
+                  {formatTime(time)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
-        {/* Summary row */}
-        {venue.travelTimes.length > 0 && (
-          <div className="flex justify-between border-t pt-2 text-xs text-muted-foreground">
-            <span>Avg: {formatTime(avgTime)}</span>
-            <span>Max: {formatTime(maxTime)}</span>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+      {/* Summary */}
+      {venue.travelTimes.length > 0 && (
+        <div className="flex justify-between mt-3 pt-2.5 border-t border-border/40 text-xs text-muted-foreground">
+          <span>Avg: <span className="font-semibold text-foreground/60">{formatTime(avgTime)}</span></span>
+          <span>Max: <span className="font-semibold text-foreground/60">{formatTime(maxTime)}</span></span>
+        </div>
+      )}
+    </div>
   );
 }

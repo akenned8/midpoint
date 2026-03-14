@@ -2,8 +2,6 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
 import type { Person, TransportMode } from '@/types';
 
 interface PersonInputProps {
@@ -92,50 +90,60 @@ export default function PersonInput({
     onUpdate({ ...person, label });
   };
 
+  const hasLocation = person.lat !== 0 && person.lng !== 0;
+
   return (
-    <div className="flex flex-col gap-2 rounded-lg border p-3">
-      <div className="flex items-center gap-2">
-        {/* Color indicator */}
+    <div className="rounded-2xl border border-border/60 bg-card p-3.5 shadow-sm transition-all hover:shadow-md">
+      <div className="flex items-center gap-2.5">
+        {/* Color dot */}
         <div
-          className="h-4 w-4 shrink-0 rounded-full"
+          className="h-5 w-5 shrink-0 rounded-full shadow-sm"
           style={{ backgroundColor: person.color }}
         />
 
         {/* Name input */}
-        <Input
+        <input
           value={person.label}
           onChange={(e) => handleLabelChange(e.target.value)}
-          className="h-8 w-24 text-sm font-medium"
+          className="h-8 w-24 rounded-lg bg-transparent text-sm font-semibold focus:outline-none focus:bg-muted/50 px-1.5 transition-colors"
           placeholder="Name"
         />
 
+        {/* Location badge */}
+        {hasLocation && (
+          <span className="ml-auto mr-1 flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-medium text-green-700">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500" />
+            set
+          </span>
+        )}
+
         {/* Remove button */}
         {canRemove && (
-          <Button
-            variant="ghost"
-            size="sm"
+          <button
             onClick={onRemove}
-            className="ml-auto h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+            className="ml-auto flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground/50 hover:bg-red-50 hover:text-red-500 transition-colors"
           >
-            ×
-          </Button>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
         )}
       </div>
 
       {/* Address input with suggestions */}
-      <div className="relative">
-        <Input
+      <div className="relative mt-2.5">
+        <input
           value={address}
           onChange={(e) => handleAddressChange(e.target.value)}
-          placeholder="Enter address or neighborhood..."
-          className="h-9 text-sm"
+          placeholder="Search address or click the map..."
+          className="flex h-10 w-full rounded-xl border border-input bg-muted/30 px-3.5 text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all"
         />
         {showSuggestions && suggestions.length > 0 && (
-          <div className="absolute z-10 mt-1 w-full rounded-md border bg-popover shadow-md">
+          <div className="absolute z-20 mt-1.5 w-full rounded-xl border border-border/60 bg-card shadow-xl shadow-black/8 overflow-hidden">
             {suggestions.map((s) => (
               <button
                 key={s.placeId}
-                className="w-full px-3 py-2 text-left text-sm hover:bg-accent"
+                className="w-full px-3.5 py-2.5 text-left text-sm hover:bg-primary/5 transition-colors first:rounded-t-xl last:rounded-b-xl"
                 onClick={() => handleSelectSuggestion(s)}
               >
                 {s.description}
@@ -143,40 +151,26 @@ export default function PersonInput({
             ))}
           </div>
         )}
-
-        {/* Manual lat/lng display if set */}
-        {person.lat !== 0 && person.lng !== 0 && (
-          <p className="mt-1 text-xs text-muted-foreground">
-            {person.lat.toFixed(4)}, {person.lng.toFixed(4)}
-          </p>
-        )}
       </div>
 
-      {/* Transport mode selector */}
-      <div className="flex gap-1">
+      {/* Transport mode pills */}
+      <div className="mt-2.5 flex gap-1">
         {MODES.map((m) => (
           <button
             key={m.value}
             onClick={() => handleModeChange(m.value)}
-            className={`flex h-8 flex-1 items-center justify-center gap-1 rounded-md text-xs transition-colors ${
+            className={`flex h-8 flex-1 items-center justify-center gap-1 rounded-xl text-xs font-medium transition-all ${
               person.mode === m.value
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-muted text-muted-foreground hover:bg-accent'
+                ? 'bg-foreground text-background shadow-sm'
+                : 'bg-muted/50 text-muted-foreground hover:bg-muted'
             }`}
             title={m.label}
           >
-            <span>{m.icon}</span>
+            <span className="text-sm">{m.icon}</span>
             <span className="hidden sm:inline">{m.label}</span>
           </button>
         ))}
       </div>
-
-      {/* Staten Island warning */}
-      {person.mode === 'transit' && person.lat > 0 && person.lat < 40.65 && person.lng < -74.05 && (
-        <p className="text-xs text-amber-600">
-          Staten Island ferry schedule may affect travel time accuracy
-        </p>
-      )}
     </div>
   );
 }
