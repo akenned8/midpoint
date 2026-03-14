@@ -1,26 +1,42 @@
-// Mapbox GL JS map with marker and isochrone layer support
+// Mapbox GL JS map with markers, route lines, and isochrone layers
 'use client';
 
-import { useRef, useEffect, useCallback, useMemo } from 'react';
+import { useRef, useEffect, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import type { Person, Venue } from '@/types';
 
+export interface RouteFeature {
+  personId: string;
+  color: string;
+  durationSeconds: number;
+  geometry: GeoJSON.Feature<GeoJSON.LineString>;
+}
+
 interface MapProps {
   people: Person[];
   venues: Venue[];
+  routes: RouteFeature[];
   isochrones: GeoJSON.FeatureCollection | null;
   selectedVenueId: string | null;
   onMapClick?: (lat: number, lng: number) => void;
 }
 
-// NYC center
 const NYC_CENTER: [number, number] = [-73.98, 40.74];
 const NYC_ZOOM = 11.5;
+
+function formatDuration(seconds: number): string {
+  const mins = Math.round(seconds / 60);
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  const rem = mins % 60;
+  return rem > 0 ? `${hrs}h ${rem}m` : `${hrs}h`;
+}
 
 export default function Map({
   people,
   venues,
+  routes,
   isochrones,
   selectedVenueId,
   onMapClick,
@@ -28,6 +44,8 @@ export default function Map({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
+  const venueMarkersRef = useRef<mapboxgl.Marker[]>([]);
+  const routeLabelMarkersRef = useRef<mapboxgl.Marker[]>([]);
 
   // Initialize map
   useEffect(() => {
@@ -48,17 +66,15 @@ export default function Map({
     });
 
     map.addControl(new mapboxgl.NavigationControl(), 'top-right');
-
     mapRef.current = map;
 
     return () => {
       map.remove();
       mapRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Keep click handler up to date with latest onMapClick callback
+  // Keep click handler up to date
   const onMapClickRef = useRef(onMapClick);
   onMapClickRef.current = onMapClick;
 
@@ -78,7 +94,6 @@ export default function Map({
     const map = mapRef.current;
     if (!map) return;
 
-    // Clear old markers
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
 
@@ -86,20 +101,20 @@ export default function Map({
       if (!person.lat || !person.lng) continue;
 
       const el = document.createElement('div');
-      el.className = 'person-marker';
       el.style.cssText = `
-        width: 28px; height: 28px; border-radius: 50%;
+        width: 32px; height: 32px; border-radius: 50%;
         background: ${person.color}; border: 3px solid white;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.35);
         display: flex; align-items: center; justify-content: center;
-        color: white; font-size: 12px; font-weight: bold;
+        color: white; font-size: 13px; font-weight: bold;
+        z-index: 10;
       `;
       el.textContent = person.label.charAt(0).toUpperCase();
 
       const marker = new mapboxgl.Marker({ element: el })
         .setLngLat([person.lng, person.lat])
         .setPopup(
-          new mapboxgl.Popup({ offset: 15 }).setHTML(
+          new mapboxgl.Popup({ offset: 18 }).setHTML(
             `<strong>${person.label}</strong><br/>${person.mode}`
           )
         )
@@ -110,7 +125,6 @@ export default function Map({
   }, [people]);
 
   // Update venue markers
-  const venueMarkersRef = useRef<mapboxgl.Marker[]>([]);
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -120,24 +134,26 @@ export default function Map({
 
     for (const venue of venues) {
       const isSelected = venue.placeId === selectedVenueId;
+
       const el = document.createElement('div');
       el.style.cssText = `
-        width: ${isSelected ? 20 : 14}px;
-        height: ${isSelected ? 20 : 14}px;
-        border-radius: 50%;
+        width: ${isSelected ? 24 : 16}px;
+        height: ${isSelected ? 24 : 16}px;
+        border-radius: ${isSelected ? '4px' : '50%'};
         background: ${isSelected ? '#f97316' : '#6366f1'};
         border: 2px solid white;
         box-shadow: 0 1px 4px rgba(0,0,0,0.3);
         cursor: pointer;
-        transition: all 0.15s;
+        transition: all 0.2s;
+        z-index: ${isSelected ? 5 : 1};
       `;
 
       const marker = new mapboxgl.Marker({ element: el })
         .setLngLat([venue.lng, venue.lat])
         .setPopup(
-          new mapboxgl.Popup({ offset: 10 }).setHTML(
+          new mapboxgl.Popup({ offset: 12 }).setHTML(
             `<strong>${venue.name}</strong><br/>` +
-            `${venue.rating ? `⭐ ${venue.rating}` : ''} ` +
+            `${venue.rating ? `★ ${venue.rating}` : ''} ` +
             `${venue.types.slice(0, 2).join(', ')}`
           )
         )
@@ -147,12 +163,112 @@ export default function Map({
     }
   }, [venues, selectedVenueId]);
 
+  // Update route lines
+  const updateRoutes = useCallback((routeData: RouteFeature[]) => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const doUpdate = () => {
+      // Remove existing route layers and sources
+      for (let i = 0; i < 10; i++) {
+        const lineId = `route-line-${i}`;
+        const outlineId = `route-outline-${i}`;
+        const sourceId = `route-${i}`;
+        if (map.getLayer(lineId)) map.removeLayer(lineId);
+        if (map.getLayer(outlineId)) map.removeLayer(outlineId);
+        if (map.getSource(sourceId)) map.removeSource(sourceId);
+      }
+
+      // Remove old label markers
+      routeLabelMarkersRef.current.forEach((m) => m.remove());
+      routeLabelMarkersRef.current = [];
+
+      if (routeData.length === 0) return;
+
+      // Add each route as a separate source/layer for individual colors
+      routeData.forEach((route, i) => {
+        const sourceId = `route-${i}`;
+        const outlineId = `route-outline-${i}`;
+        const lineId = `route-line-${i}`;
+
+        map.addSource(sourceId, {
+          type: 'geojson',
+          data: route.geometry,
+        });
+
+        // White outline for contrast
+        map.addLayer({
+          id: outlineId,
+          type: 'line',
+          source: sourceId,
+          layout: { 'line-join': 'round', 'line-cap': 'round' },
+          paint: {
+            'line-color': '#ffffff',
+            'line-width': 6,
+            'line-opacity': 0.8,
+          },
+        });
+
+        // Colored route line
+        map.addLayer({
+          id: lineId,
+          type: 'line',
+          source: sourceId,
+          layout: { 'line-join': 'round', 'line-cap': 'round' },
+          paint: {
+            'line-color': route.color,
+            'line-width': 3.5,
+            'line-opacity': 0.85,
+          },
+        });
+
+        // Add travel time label at midpoint of the route
+        if (route.durationSeconds > 0) {
+          const coords = route.geometry.geometry.coordinates;
+          const midIdx = Math.floor(coords.length / 2);
+          const midCoord = coords[midIdx];
+
+          if (midCoord) {
+            const el = document.createElement('div');
+            el.style.cssText = `
+              background: ${route.color};
+              color: white;
+              padding: 2px 6px;
+              border-radius: 10px;
+              font-size: 11px;
+              font-weight: 600;
+              white-space: nowrap;
+              box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+              pointer-events: none;
+            `;
+            el.textContent = formatDuration(route.durationSeconds);
+
+            const labelMarker = new mapboxgl.Marker({ element: el, anchor: 'center' })
+              .setLngLat([midCoord[0], midCoord[1]])
+              .addTo(map);
+
+            routeLabelMarkersRef.current.push(labelMarker);
+          }
+        }
+      });
+    };
+
+    if (map.isStyleLoaded()) {
+      doUpdate();
+    } else {
+      map.on('load', doUpdate);
+    }
+  }, []);
+
+  useEffect(() => {
+    updateRoutes(routes);
+  }, [routes, updateRoutes]);
+
   // Update isochrone layers
   const updateIsochrones = useCallback((geojson: GeoJSON.FeatureCollection | null) => {
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
 
-    // Remove existing isochrone layers
     if (map.getLayer('isochrone-fill')) map.removeLayer('isochrone-fill');
     if (map.getLayer('isochrone-outline')) map.removeLayer('isochrone-outline');
     if (map.getSource('isochrone')) map.removeSource('isochrone');
@@ -168,11 +284,9 @@ export default function Map({
       paint: {
         'fill-color': [
           'interpolate', ['linear'], ['get', 'contour'],
-          10, '#4ade80',
-          20, '#facc15',
-          30, '#f87171',
+          10, '#4ade80', 20, '#facc15', 30, '#f87171',
         ],
-        'fill-opacity': 0.15,
+        'fill-opacity': 0.12,
       },
     });
 
@@ -183,12 +297,10 @@ export default function Map({
       paint: {
         'line-color': [
           'interpolate', ['linear'], ['get', 'contour'],
-          10, '#22c55e',
-          20, '#eab308',
-          30, '#ef4444',
+          10, '#22c55e', 20, '#eab308', 30, '#ef4444',
         ],
         'line-width': 1.5,
-        'line-opacity': 0.6,
+        'line-opacity': 0.5,
       },
     });
   }, []);
@@ -204,7 +316,7 @@ export default function Map({
     }
   }, [isochrones, updateIsochrones]);
 
-  // Fit bounds when people change
+  // Fit bounds
   useEffect(() => {
     const map = mapRef.current;
     if (!map || people.filter((p) => p.lat && p.lng).length < 2) return;

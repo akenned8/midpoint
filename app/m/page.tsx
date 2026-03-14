@@ -147,6 +147,7 @@ function SharedContent() {
         <Map
           people={state.people}
           venues={venues}
+          routes={[]}
           isochrones={null}
           selectedVenueId={selectedVenueId}
         />

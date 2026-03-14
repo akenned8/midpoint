@@ -13,6 +13,7 @@ import DepartureTimePicker from '@/components/DepartureTimePicker';
 import { encodeState } from '@/lib/url-state';
 import { detectOutlier } from '@/lib/scoring';
 import type { Person, Venue, SessionState, TravelTimeResult } from '@/types';
+import type { RouteFeature } from '@/components/Map';
 
 const Map = dynamic(() => import('@/components/Map'), { ssr: false });
 
@@ -61,6 +62,7 @@ export default function Home() {
   const [rankings, setRankings] = useState<TravelTimeResult[]>([]);
   const [candidateDetails, setCandidateDetails] = useState<CandidateDetail[]>([]);
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
+  const [routes, setRoutes] = useState<RouteFeature[]>([]);
   const [isochrones, setIsochrones] = useState<GeoJSON.FeatureCollection | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingStage, setLoadingStage] = useState('');
@@ -115,6 +117,7 @@ export default function Home() {
     setVenues([]);
     setRankings([]);
     setCandidateDetails([]);
+    setRoutes([]);
     setIsochrones(null);
 
     try {
@@ -181,24 +184,29 @@ export default function Home() {
                 setOutlierIndex(detectOutlier(r[0].times));
               }
 
-              // Fetch isochrones for top result
-              const nonTransit = validPeople.find((p) => p.mode !== 'transit');
+              // Fetch routes from each person to the top result
               const topCandidate = cd.find((c) => c.hotspotId === r?.[0]?.hotspotId);
-              if (nonTransit && topCandidate) {
-                fetch('/api/isochrones', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    lat: topCandidate.lat,
-                    lng: topCandidate.lng,
-                    mode: nonTransit.mode === 'transit' ? 'driving' : nonTransit.mode,
-                    contours_minutes: [10, 20, 30],
-                  }),
-                }).then(async (isoRes) => {
-                  if (isoRes.ok && isoRes.status !== 204) {
-                    setIsochrones(await isoRes.json());
-                  }
-                }).catch(() => {});
+              if (topCandidate) {
+                fetchRoutes(validPeople, topCandidate, departureTime);
+
+                // Also fetch isochrones for non-transit users
+                const nonTransit = validPeople.find((p) => p.mode !== 'transit');
+                if (nonTransit) {
+                  fetch('/api/isochrones', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      lat: topCandidate.lat,
+                      lng: topCandidate.lng,
+                      mode: nonTransit.mode === 'transit' ? 'driving' : nonTransit.mode,
+                      contours_minutes: [10, 20, 30],
+                    }),
+                  }).then(async (isoRes) => {
+                    if (isoRes.ok && isoRes.status !== 204) {
+                      setIsochrones(await isoRes.json());
+                    }
+                  }).catch(() => {});
+                }
               }
             }
 
@@ -218,6 +226,48 @@ export default function Home() {
     } finally {
       setIsLoading(false);
       setLoadingStage('done');
+    }
+  };
+
+  // Fetch route polylines from each person to a destination
+  const fetchRoutes = async (
+    ppl: Person[],
+    dest: { lat: number; lng: number },
+    depTime: string,
+  ) => {
+    try {
+      const res = await fetch('/api/directions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          routes: ppl.map((p) => ({
+            personId: p.id,
+            originLat: p.lat,
+            originLng: p.lng,
+            destLat: dest.lat,
+            destLng: dest.lng,
+            mode: p.mode,
+            color: p.color,
+          })),
+          departureTime: depTime,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setRoutes(data.routes ?? []);
+      }
+    } catch {
+      // Routes are visual enhancement — don't block on failure
+    }
+  };
+
+  // Refetch routes when user selects a different venue
+  const handleSelectVenue = (venueId: string) => {
+    setSelectedVenueId(venueId);
+    const venue = displayItems.find((v) => v.placeId === venueId);
+    if (venue) {
+      const validPeople = people.filter((p) => p.lat !== 0 && p.lng !== 0);
+      fetchRoutes(validPeople, { lat: venue.lat, lng: venue.lng }, departureTime);
     }
   };
 
@@ -338,7 +388,7 @@ export default function Home() {
                     people={people.filter((p) => p.lat !== 0 && p.lng !== 0)}
                     rank={i + 1}
                     isSelected={item.placeId === selectedVenueId}
-                    onClick={() => setSelectedVenueId(item.placeId)}
+                    onClick={() => handleSelectVenue(item.placeId)}
                   />
                 ))}
 
@@ -347,7 +397,7 @@ export default function Home() {
                     people={people.filter((p) => p.lat !== 0 && p.lng !== 0)}
                     venues={displayItems}
                     selectedVenueId={selectedVenueId}
-                    onSelectVenue={setSelectedVenueId}
+                    onSelectVenue={handleSelectVenue}
                   />
                 )}
               </div>
@@ -379,6 +429,7 @@ export default function Home() {
         <Map
           people={people}
           venues={displayItems}
+          routes={routes}
           isochrones={isochrones}
           selectedVenueId={selectedVenueId}
           onMapClick={handleMapClick}
