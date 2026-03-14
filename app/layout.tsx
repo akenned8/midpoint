@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "meetmidpoint",
+  title: "Midpoint",
   description: "Find the fairest meeting spot for everyone",
 };
 

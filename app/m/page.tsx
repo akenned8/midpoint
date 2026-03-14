@@ -63,7 +63,7 @@ function SharedContent() {
     return (
       <div className="flex min-h-screen items-center justify-center p-8">
         <div className="text-center">
-          <h1 className="text-2xl font-bold">meetmidpoint</h1>
+          <h1 className="text-2xl font-bold">Midpoint</h1>
           <p className="mt-2 text-muted-foreground">{error}</p>
           <a href="/" className="mt-4 inline-block text-primary underline">
             Start a new search
@@ -77,7 +77,7 @@ function SharedContent() {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold">meetmidpoint</h1>
+          <h1 className="text-2xl font-bold">Midpoint</h1>
           <p className="mt-2 animate-pulse text-muted-foreground">Loading shared session...</p>
         </div>
       </div>
@@ -88,7 +88,7 @@ function SharedContent() {
     <div className="flex min-h-screen flex-col lg:flex-row">
       <div className="flex w-full flex-col gap-4 overflow-y-auto border-r p-4 lg:w-[420px] lg:shrink-0">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold tracking-tight">meetmidpoint</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Midpoint</h1>
           <a href="/" className="text-sm text-primary underline">
             New search
           </a>

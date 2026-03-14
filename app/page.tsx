@@ -145,7 +145,7 @@ export default function Home() {
       {/* Sidebar */}
       <div className="flex w-full flex-col gap-4 overflow-y-auto border-r p-4 lg:w-[420px] lg:shrink-0">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold tracking-tight">meetmidpoint</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Midpoint</h1>
           {venues.length > 0 && (
             <Button variant="outline" size="sm" onClick={shareLink}>
               Share

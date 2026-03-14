@@ -1,7 +1,7 @@
 // Mapbox GL JS map with marker and isochrone layer support
 'use client';
 
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useCallback, useMemo } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import type { Person, Venue } from '@/types';
@@ -49,10 +49,6 @@ export default function Map({
 
     map.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
-    map.on('click', (e) => {
-      onMapClick?.(e.lngLat.lat, e.lngLat.lng);
-    });
-
     mapRef.current = map;
 
     return () => {
@@ -60,6 +56,21 @@ export default function Map({
       mapRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Keep click handler up to date with latest onMapClick callback
+  const onMapClickRef = useRef(onMapClick);
+  onMapClickRef.current = onMapClick;
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const handler = (e: mapboxgl.MapMouseEvent) => {
+      onMapClickRef.current?.(e.lngLat.lat, e.lngLat.lng);
+    };
+    map.on('click', handler);
+    return () => { map.off('click', handler); };
   }, []);
 
   // Update person markers
