@@ -1,12 +1,23 @@
 // Encode/decode SessionState to/from URL using lz-string
+import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from 'lz-string';
 import type { SessionState } from '@/types';
 
-// TODO: Compress SessionState to URL-safe string using lz-string
-export function encodeState(_state: SessionState): string {
-  return '';
+export function encodeState(state: SessionState): string {
+  const json = JSON.stringify(state);
+  return compressToEncodedURIComponent(json);
 }
 
-// TODO: Decompress URL-safe string back to SessionState
-export function decodeState(_encoded: string): SessionState | null {
-  return null;
+export function decodeState(encoded: string): SessionState | null {
+  try {
+    const json = decompressFromEncodedURIComponent(encoded);
+    if (!json) return null;
+    const parsed = JSON.parse(json) as SessionState;
+    // Basic validation
+    if (!Array.isArray(parsed.people) || typeof parsed.alpha !== 'number') {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
 }
