@@ -239,9 +239,9 @@ export default function Home() {
   const hasResults = displayItems.length > 0;
 
   return (
-    <div className="flex min-h-screen flex-col lg:flex-row">
+    <div className="flex h-screen flex-col lg:flex-row overflow-hidden">
       {/* Sidebar */}
-      <div className="flex w-full flex-col gap-4 overflow-y-auto border-r p-4 lg:w-[420px] lg:shrink-0">
+      <div className="flex w-full flex-col gap-4 overflow-y-auto border-r p-4 lg:h-screen lg:w-[420px] lg:shrink-0">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold tracking-tight">Midpoint</h1>
           {hasResults && (
@@ -375,7 +375,7 @@ export default function Home() {
       </div>
 
       {/* Map */}
-      <div className="flex-1">
+      <div className="flex-1 lg:h-screen">
         <Map
           people={people}
           venues={displayItems}
