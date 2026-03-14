@@ -184,10 +184,15 @@ export default function Home() {
                 setOutlierIndex(detectOutlier(r[0].times));
               }
 
-              // Fetch routes from each person to the top result
+              // Fetch routes to the top venue (or top hotspot candidate as fallback)
+              const topVenue = v?.[0];
               const topCandidate = cd.find((c) => c.hotspotId === r?.[0]?.hotspotId);
-              if (topCandidate) {
-                fetchRoutes(validPeople, topCandidate, departureTime);
+              const routeDest = topVenue ?? topCandidate;
+              if (routeDest) {
+                // Auto-select the top result so route times show in its card
+                if (topVenue) setSelectedVenueId(topVenue.placeId);
+                else if (topCandidate) setSelectedVenueId(topCandidate.hotspotId);
+                fetchRoutes(validPeople, routeDest, departureTime);
 
                 // Also fetch isochrones for non-transit users
                 const nonTransit = validPeople.find((p) => p.mode !== 'transit');
@@ -196,8 +201,8 @@ export default function Home() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                      lat: topCandidate.lat,
-                      lng: topCandidate.lng,
+                      lat: routeDest.lat,
+                      lng: routeDest.lng,
                       mode: nonTransit.mode === 'transit' ? 'driving' : nonTransit.mode,
                       contours_minutes: [10, 20, 30],
                     }),
@@ -284,7 +289,7 @@ export default function Home() {
   };
 
   // Build display items: venues with travel times, or ranked neighborhoods as fallback
-  const displayItems = buildDisplayItems(rankings, venues, candidateDetails, people);
+  const displayItems = buildDisplayItems(rankings, venues, candidateDetails, people, routes, selectedVenueId);
   const validCount = people.filter((p) => p.lat !== 0 && p.lng !== 0).length;
   const hasResults = displayItems.length > 0;
 
@@ -445,12 +450,33 @@ function buildDisplayItems(
   venues: Venue[],
   candidateDetails: CandidateDetail[],
   people: Person[],
+  routes: RouteFeature[],
+  selectedVenueId: string | null,
 ): Venue[] {
   if (rankings.length === 0) return [];
+
+  // Build route-based travel times for the selected venue (most accurate, uses current modes)
+  const validPeople = people.filter((p) => p.lat !== 0 && p.lng !== 0);
+  let routeTimesForSelected: number[] | null = null;
+  if (selectedVenueId && routes.length > 0) {
+    routeTimesForSelected = validPeople.map((p) => {
+      const route = routes.find((r) => r.personId === p.id);
+      return route?.durationSeconds ?? 0;
+    });
+    // Only use if we got valid times for all people
+    if (routeTimesForSelected.some((t) => t === 0)) {
+      routeTimesForSelected = null;
+    }
+  }
 
   // If we have venues, attach travel times from the nearest ranking
   if (venues.length > 0) {
     return venues.slice(0, 10).map((venue) => {
+      // For the selected venue, prefer route-based times (reflects current transport modes)
+      if (venue.placeId === selectedVenueId && routeTimesForSelected) {
+        return { ...venue, travelTimes: routeTimesForSelected };
+      }
+
       // Find closest ranking candidate
       let bestRanking = rankings[0];
       let bestDist = Infinity;
@@ -470,6 +496,7 @@ function buildDisplayItems(
   // Fallback: show ranked neighborhoods as pseudo-venues
   return rankings.slice(0, 10).map((r) => {
     const cd = candidateDetails.find((c) => c.hotspotId === r.hotspotId);
+    const isSelected = r.hotspotId === selectedVenueId;
     return {
       placeId: r.hotspotId,
       name: cd?.neighborhood ?? r.hotspotId,
@@ -479,7 +506,7 @@ function buildDisplayItems(
       reviewCount: 0,
       types: [cd?.borough ?? ''],
       neighborhood: cd?.borough?.replace('_', ' ') ?? '',
-      travelTimes: r.times,
+      travelTimes: isSelected && routeTimesForSelected ? routeTimesForSelected : r.times,
     };
   });
 }
