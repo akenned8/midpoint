@@ -211,8 +211,7 @@ export default function Map({
   return (
     <div
       ref={containerRef}
-      className="h-full w-full rounded-lg"
-      style={{ minHeight: '400px' }}
+      className="h-full min-h-[42vh] w-full lg:min-h-0 lg:rounded-lg"
     />
   );
 }

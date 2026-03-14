@@ -142,8 +142,19 @@ export default function Home() {
 
   return (
     <div className="flex min-h-screen flex-col lg:flex-row">
-      {/* Sidebar */}
-      <div className="flex w-full flex-col gap-4 overflow-y-auto border-r p-4 lg:w-[420px] lg:shrink-0">
+      {/* Map — first on mobile so it's immediately visible */}
+      <div className="order-first h-[42vh] shrink-0 lg:order-last lg:h-auto lg:flex-1">
+        <Map
+          people={people}
+          venues={venues}
+          isochrones={isochrones}
+          selectedVenueId={selectedVenueId}
+          onMapClick={handleMapClick}
+        />
+      </div>
+
+      {/* Sidebar — slides up over the map edge on mobile */}
+      <div className="relative z-10 order-last -mt-4 flex w-full flex-col gap-4 overflow-y-auto rounded-t-2xl bg-background p-4 shadow-[0_-4px_20px_rgba(0,0,0,0.10)] lg:order-first lg:mt-0 lg:w-[420px] lg:shrink-0 lg:rounded-none lg:border-r lg:shadow-none">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold tracking-tight">meetmidpoint</h1>
           {venues.length > 0 && (
@@ -262,17 +273,6 @@ export default function Home() {
             </div>
           </TabsContent>
         </Tabs>
-      </div>
-
-      {/* Map */}
-      <div className="flex-1">
-        <Map
-          people={people}
-          venues={venues}
-          isochrones={isochrones}
-          selectedVenueId={selectedVenueId}
-          onMapClick={handleMapClick}
-        />
       </div>
     </div>
   );
