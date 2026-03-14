@@ -5,31 +5,32 @@ import { geohash } from '@/lib/geo';
 
 let redis: Redis | null = null;
 
-function getRedis(): Redis {
+function getRedis(): Redis | null {
   if (!redis) {
     const url = process.env.UPSTASH_REDIS_REST_URL;
     const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-    if (!url || !token) {
-      throw new Error('Missing UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN');
-    }
+    if (!url || !token) return null;
     redis = new Redis({ url, token });
   }
   return redis;
 }
 
 export async function getCached<T>(key: string): Promise<T | null> {
+  const client = getRedis();
+  if (!client) return null;
   try {
-    const value = await getRedis().get<T>(key);
+    const value = await client.get<T>(key);
     return value ?? null;
   } catch {
-    // Cache miss on error — don't block the request
     return null;
   }
 }
 
 export async function setCached<T>(key: string, value: T, ttlSeconds: number): Promise<void> {
+  const client = getRedis();
+  if (!client) return;
   try {
-    await getRedis().set(key, value, { ex: ttlSeconds });
+    await client.set(key, value, { ex: ttlSeconds });
   } catch {
     // Swallow cache write errors — non-critical
   }
