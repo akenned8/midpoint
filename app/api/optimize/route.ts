@@ -1,66 +1,80 @@
-// POST — Full optimization pipeline endpoint
-import { NextResponse } from 'next/server';
+// POST — Full optimization pipeline endpoint (streamed stages)
 import { headers } from 'next/headers';
 import { optimize } from '@/lib/optimizer';
-import type { Person, ObjectiveType, Hotspot } from '@/types';
-
-interface OptimizeRequest {
-  people: Person[];
-  objective: ObjectiveType;
-  alpha: number;
-  departureTime: string;
-}
+import type { Hotspot } from '@/types';
+import hotspotData from '@/data/hotspots-nyc.json';
 
 export async function POST(request: Request) {
-  let body: OptimizeRequest;
+  let body;
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+    return Response.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
   const { people, objective, alpha, departureTime } = body;
   if (!people?.length || people.length < 2) {
-    return NextResponse.json({ error: 'At least 2 people required' }, { status: 400 });
+    return Response.json({ error: 'At least 2 people required' }, { status: 400 });
   }
   if (people.length > 6) {
-    return NextResponse.json({ error: 'Maximum 6 people' }, { status: 400 });
+    return Response.json({ error: 'Maximum 6 people' }, { status: 400 });
   }
 
-  // Load hotspots
-  let hotspots: Hotspot[] = [];
-  try {
-    hotspots = (await import('@/data/hotspots-nyc.json')).default as Hotspot[];
-  } catch {
-    // Hotspot corpus not built yet — will use empty array
-  }
+  const hotspots = hotspotData as Hotspot[];
 
   if (hotspots.length === 0) {
-    return NextResponse.json(
-      { error: 'Hotspot corpus not available', rankings: [], venues: [] },
-      { status: 200 }
-    );
+    return Response.json({ error: 'Hotspot corpus not available', rankings: [], venues: [], candidateDetails: [], stages: [] });
   }
 
-  // Determine base URL for internal API calls
-  const headersList = await headers();
-  const host = headersList.get('host') ?? 'localhost:3000';
-  const protocol = headersList.get('x-forwarded-proto') ?? 'http';
-  const baseUrl = `${protocol}://${host}`;
+  // Stream results using SSE so the frontend can show stages in real-time
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (data: Record<string, unknown>) => {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+      };
 
-  try {
-    const result = await optimize({
-      people,
-      hotspots,
-      objective,
-      alpha,
-      departureTime,
-      baseUrl,
-    });
+      try {
+        send({ type: 'stage', stage: 'prefilter', detail: 'Analyzing locations...' });
 
-    return NextResponse.json(result);
-  } catch (err) {
-    console.error('Optimize error:', err);
-    return NextResponse.json({ error: 'Optimization failed' }, { status: 500 });
-  }
+        const result = await optimize({
+          people,
+          hotspots,
+          objective: objective ?? 'blended',
+          alpha: alpha ?? 0.7,
+          departureTime: departureTime ?? 'now',
+        });
+
+        // Send each stage as it completed
+        for (const s of result.stages) {
+          if (s.stage !== 'done') {
+            send({ type: 'stage', stage: s.stage, detail: s.detail, durationMs: s.durationMs });
+          }
+        }
+
+        // Send final result
+        send({
+          type: 'result',
+          rankings: result.rankings,
+          venues: result.venues,
+          candidateDetails: result.candidateDetails,
+          usedHeuristic: result.usedHeuristic,
+          stages: result.stages,
+        });
+      } catch (err) {
+        console.error('Optimize error:', err);
+        send({ type: 'error', error: 'Optimization failed' });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+    },
+  });
 }
