@@ -330,23 +330,6 @@ export default function Home() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const resetAll = () => {
-    abortRef.current?.abort();
-    setPeople(people.map((p) => ({ ...p, lat: 0, lng: 0 })));
-    setVenues([]);
-    setRankings([]);
-    setCandidateDetails([]);
-    setRoutes([]);
-    setIsochrones(null);
-    setSelectedVenueId(null);
-    setOutlierIndex(null);
-    setError(null);
-    setEvalPin(null);
-    setEvalRoutes([]);
-    setIsLoading(false);
-    setLoadingStage('');
-  };
-
   const validCount = people.filter((p) => p.lat !== 0 && p.lng !== 0).length;
 
   // Compute the mobile sheet height
@@ -368,18 +351,11 @@ export default function Home() {
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <span className="text-[13px] font-medium text-[#1D1D1F]">People</span>
-        <div className="flex items-center gap-3">
-          {validCount > 0 && (
-            <button onClick={resetAll} className="text-[13px] font-medium text-[#FF3B30] hover:text-[#D70015] transition-colors">
-              Reset
-            </button>
-          )}
-          {people.length < 6 && (
-            <button onClick={addPerson} className="text-[13px] font-medium text-[#007AFF] hover:text-[#0071EB] transition-colors">
-              Add Person
-            </button>
-          )}
-        </div>
+        {people.length < 6 && (
+          <button onClick={addPerson} className="text-[13px] font-medium text-[#007AFF] hover:text-[#0071EB] transition-colors">
+            Add Person
+          </button>
+        )}
       </div>
       {people.map((person, i) => (
         <PersonInput

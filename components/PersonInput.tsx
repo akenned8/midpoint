@@ -1,7 +1,7 @@
 // Address autocomplete + transport mode selector per person
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import type { Person, TransportMode } from '@/types';
 
 interface PersonInputProps {
@@ -64,6 +64,15 @@ export default function PersonInput({
     } catch {}
   };
 
+  // Clear address when location is reset
+  useEffect(() => {
+    if (person.lat === 0 && person.lng === 0) {
+      setAddress('');
+      setSuggestions([]);
+      setShowSuggestions(false);
+    }
+  }, [person.lat, person.lng]);
+
   const hasLocation = person.lat !== 0 && person.lng !== 0;
 
   return (
@@ -81,9 +90,12 @@ export default function PersonInput({
           placeholder="Name"
         />
         {hasLocation && (
-          <span className="ml-auto text-[11px] font-medium text-[#34C759]">
-            Located
-          </span>
+          <button
+            onClick={() => onUpdate({ ...person, lat: 0, lng: 0 })}
+            className="ml-auto text-[11px] font-medium text-[#FF3B30] hover:text-[#D70015] transition-colors"
+          >
+            Reset
+          </button>
         )}
         {canRemove && (
           <button
