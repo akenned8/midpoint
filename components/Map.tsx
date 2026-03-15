@@ -1,4 +1,4 @@
-// Mapbox GL JS map with markers, route lines, and isochrone layers
+// Mapbox GL JS map with markers, route lines, transit segments, and isochrone layers
 'use client';
 
 import { useRef, useEffect, useCallback } from 'react';
@@ -6,11 +6,21 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import type { Person, Venue } from '@/types';
 
+export interface RouteSegment {
+  travelMode: 'WALK' | 'TRANSIT';
+  durationSeconds: number;
+  polyline: [number, number][];
+  transitLineName?: string;
+  transitLineColor?: string;
+  transitLineShortName?: string;
+}
+
 export interface RouteFeature {
   personId: string;
   color: string;
   durationSeconds: number;
   geometry: GeoJSON.Feature<GeoJSON.LineString>;
+  segments?: RouteSegment[];
 }
 
 interface MapProps {
@@ -156,7 +166,7 @@ export default function Map({
         .setPopup(
           new mapboxgl.Popup({ offset: 12 }).setHTML(
             `<strong>${venue.name}</strong><br/>` +
-            `${venue.rating ? `★ ${venue.rating}` : ''} ` +
+            `${venue.rating ? `${venue.rating} stars` : ''} ` +
             `${venue.types.slice(0, 2).join(', ')}`
           )
         )
@@ -166,7 +176,7 @@ export default function Map({
     }
   }, [venues, selectedVenueId]);
 
-  // Update route lines
+  // Update route lines (with transit segment support)
   const updateRoutes = useCallback((routeData: RouteFeature[]) => {
     const map = mapRef.current;
     if (!map) return;
@@ -180,6 +190,16 @@ export default function Map({
         if (map.getLayer(lineId)) map.removeLayer(lineId);
         if (map.getLayer(outlineId)) map.removeLayer(outlineId);
         if (map.getSource(sourceId)) map.removeSource(sourceId);
+
+        // Remove segment layers
+        for (let j = 0; j < 20; j++) {
+          const segLineId = `route-seg-${i}-${j}`;
+          const segOutlineId = `route-seg-outline-${i}-${j}`;
+          const segSourceId = `route-seg-src-${i}-${j}`;
+          if (map.getLayer(segLineId)) map.removeLayer(segLineId);
+          if (map.getLayer(segOutlineId)) map.removeLayer(segOutlineId);
+          if (map.getSource(segSourceId)) map.removeSource(segSourceId);
+        }
       }
 
       // Remove old label markers
@@ -188,42 +208,14 @@ export default function Map({
 
       if (routeData.length === 0) return;
 
-      // Add each route as a separate source/layer for individual colors
       routeData.forEach((route, i) => {
-        const sourceId = `route-${i}`;
-        const outlineId = `route-outline-${i}`;
-        const lineId = `route-line-${i}`;
-
-        map.addSource(sourceId, {
-          type: 'geojson',
-          data: route.geometry,
-        });
-
-        // White outline for contrast
-        map.addLayer({
-          id: outlineId,
-          type: 'line',
-          source: sourceId,
-          layout: { 'line-join': 'round', 'line-cap': 'round' },
-          paint: {
-            'line-color': '#ffffff',
-            'line-width': 6,
-            'line-opacity': 0.8,
-          },
-        });
-
-        // Colored route line
-        map.addLayer({
-          id: lineId,
-          type: 'line',
-          source: sourceId,
-          layout: { 'line-join': 'round', 'line-cap': 'round' },
-          paint: {
-            'line-color': route.color,
-            'line-width': 3.5,
-            'line-opacity': 0.85,
-          },
-        });
+        if (route.segments && route.segments.length > 0) {
+          // Render transit route with distinct walk/transit segments
+          renderTransitSegments(map, route, i);
+        } else {
+          // Render as a single polyline (driving/walking/cycling)
+          renderSimpleRoute(map, route, i);
+        }
 
         // Add travel time label at midpoint of the route
         if (route.durationSeconds > 0) {
@@ -262,6 +254,145 @@ export default function Map({
       map.on('load', doUpdate);
     }
   }, []);
+
+  function renderSimpleRoute(map: mapboxgl.Map, route: RouteFeature, i: number) {
+    const sourceId = `route-${i}`;
+    const outlineId = `route-outline-${i}`;
+    const lineId = `route-line-${i}`;
+
+    map.addSource(sourceId, {
+      type: 'geojson',
+      data: route.geometry,
+    });
+
+    map.addLayer({
+      id: outlineId,
+      type: 'line',
+      source: sourceId,
+      layout: { 'line-join': 'round', 'line-cap': 'round' },
+      paint: {
+        'line-color': '#ffffff',
+        'line-width': 6,
+        'line-opacity': 0.8,
+      },
+    });
+
+    map.addLayer({
+      id: lineId,
+      type: 'line',
+      source: sourceId,
+      layout: { 'line-join': 'round', 'line-cap': 'round' },
+      paint: {
+        'line-color': route.color,
+        'line-width': 3.5,
+        'line-opacity': 0.85,
+      },
+    });
+  }
+
+  function renderTransitSegments(map: mapboxgl.Map, route: RouteFeature, routeIdx: number) {
+    route.segments!.forEach((segment, segIdx) => {
+      if (segment.polyline.length < 2) return;
+
+      const sourceId = `route-seg-src-${routeIdx}-${segIdx}`;
+      const outlineId = `route-seg-outline-${routeIdx}-${segIdx}`;
+      const lineId = `route-seg-${routeIdx}-${segIdx}`;
+
+      const geojson: GeoJSON.Feature<GeoJSON.LineString> = {
+        type: 'Feature',
+        properties: {},
+        geometry: {
+          type: 'LineString',
+          coordinates: segment.polyline,
+        },
+      };
+
+      map.addSource(sourceId, { type: 'geojson', data: geojson });
+
+      if (segment.travelMode === 'WALK') {
+        // Walking segments: dashed line in the person's color, slightly transparent
+        map.addLayer({
+          id: outlineId,
+          type: 'line',
+          source: sourceId,
+          layout: { 'line-join': 'round', 'line-cap': 'round' },
+          paint: {
+            'line-color': '#ffffff',
+            'line-width': 5,
+            'line-opacity': 0.6,
+          },
+        });
+
+        map.addLayer({
+          id: lineId,
+          type: 'line',
+          source: sourceId,
+          layout: { 'line-join': 'round', 'line-cap': 'round' },
+          paint: {
+            'line-color': route.color,
+            'line-width': 2.5,
+            'line-opacity': 0.5,
+            'line-dasharray': [2, 3],
+          },
+        });
+      } else {
+        // Transit segments: solid line in the transit line's color (or person's color)
+        const lineColor = segment.transitLineColor || route.color;
+
+        map.addLayer({
+          id: outlineId,
+          type: 'line',
+          source: sourceId,
+          layout: { 'line-join': 'round', 'line-cap': 'round' },
+          paint: {
+            'line-color': '#ffffff',
+            'line-width': 7,
+            'line-opacity': 0.8,
+          },
+        });
+
+        map.addLayer({
+          id: lineId,
+          type: 'line',
+          source: sourceId,
+          layout: { 'line-join': 'round', 'line-cap': 'round' },
+          paint: {
+            'line-color': lineColor,
+            'line-width': 4.5,
+            'line-opacity': 0.9,
+          },
+        });
+
+        // Add transit line label at segment midpoint
+        if (segment.transitLineShortName || segment.transitLineName) {
+          const midIdx = Math.floor(segment.polyline.length / 2);
+          const midCoord = segment.polyline[midIdx];
+          if (midCoord) {
+            const el = document.createElement('div');
+            el.style.cssText = `
+              background: ${lineColor};
+              color: white;
+              padding: 1px 5px;
+              border-radius: 8px;
+              font-size: 10px;
+              font-weight: 700;
+              white-space: nowrap;
+              box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+              pointer-events: none;
+              letter-spacing: 0.3px;
+            `;
+            el.textContent = segment.transitLineShortName || segment.transitLineName || '';
+
+            const labelMarker = new mapboxgl.Marker({ element: el, anchor: 'center' })
+              .setLngLat([midCoord[0], midCoord[1]])
+              .addTo(map);
+
+            routeLabelMarkersRef.current.push(labelMarker);
+          }
+        }
+      }
+    });
+  }
 
   useEffect(() => {
     updateRoutes(routes);

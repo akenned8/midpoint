@@ -64,7 +64,9 @@ export default function VenueCard({
         </div>
         {venue.rating > 0 && (
           <div className="flex items-center gap-0.5 shrink-0 text-[13px]">
-            <span className="text-[#FF9500]">★</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="#FF9500" stroke="none" className="shrink-0">
+              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 21 12 17.27 5.82 21 7 14.14 2 9.27l6.91-1.01L12 2z" />
+            </svg>
             <span className="font-medium text-[#1D1D1F]">{venue.rating.toFixed(1)}</span>
             {venue.reviewCount > 0 && (
               <span className="text-[#86868B] ml-0.5">({venue.reviewCount.toLocaleString()})</span>

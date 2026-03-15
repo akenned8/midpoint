@@ -11,11 +11,34 @@ interface PersonInputProps {
   canRemove: boolean;
 }
 
-const MODES: { value: TransportMode; icon: string; label: string }[] = [
-  { value: 'transit', icon: '🚇', label: 'Transit' },
-  { value: 'driving', icon: '🚗', label: 'Drive' },
-  { value: 'walking', icon: '🚶', label: 'Walk' },
-  { value: 'cycling', icon: '🚴', label: 'Bike' },
+const MODE_ICONS: Record<TransportMode, React.ReactNode> = {
+  transit: (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="3" width="16" height="14" rx="2" /><path d="M4 11h16" /><path d="M12 3v8" /><circle cx="8" cy="21" r="1" /><circle cx="16" cy="21" r="1" /><path d="M8 17v4" /><path d="M16 17v4" />
+    </svg>
+  ),
+  driving: (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 17h14v-5l-2-6H7L5 12v5z" /><circle cx="7.5" cy="17.5" r="1.5" /><circle cx="16.5" cy="17.5" r="1.5" />
+    </svg>
+  ),
+  walking: (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="13" cy="4" r="2" /><path d="M10 22l2-7" /><path d="M16 22l-2-7-3-3 1-4 4 2 1 4" /><path d="M9 8l-4 4" />
+    </svg>
+  ),
+  cycling: (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="6" cy="17" r="3" /><circle cx="18" cy="17" r="3" /><path d="M6 17l3-7h4l3 7" /><path d="M12 5l1 5" /><circle cx="12" cy="4" r="1" />
+    </svg>
+  ),
+};
+
+const MODES: { value: TransportMode; label: string }[] = [
+  { value: 'transit', label: 'Transit' },
+  { value: 'driving', label: 'Drive' },
+  { value: 'walking', label: 'Walk' },
+  { value: 'cycling', label: 'Bike' },
 ];
 
 export default function PersonInput({
@@ -146,7 +169,7 @@ export default function PersonInput({
                 : 'text-[#86868B] hover:text-[#1D1D1F]'
             }`}
           >
-            <span className="text-[13px] leading-none">{m.icon}</span>
+            <span className="flex items-center justify-center text-[13px] leading-none">{MODE_ICONS[m.value]}</span>
             <span className="hidden sm:inline">{m.label}</span>
           </button>
         ))}

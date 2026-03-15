@@ -557,7 +557,10 @@ export default function Home() {
       <div className="hidden lg:flex absolute inset-y-0 left-0 w-[400px] flex-col bg-[#FBFBFD]/95 backdrop-blur-xl border-r border-black/[0.06] z-20">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.04]">
-          <h1 className="text-[20px] font-semibold tracking-tight text-[#1D1D1F]">Midpoint</h1>
+          <div className="flex items-center gap-2">
+            <MidpointLogo size={24} />
+            <h1 className="text-[20px] font-semibold tracking-tight text-[#1D1D1F]">Midpoint</h1>
+          </div>
           {hasResults && (
             <button onClick={shareLink} className="flex items-center gap-1 text-[13px] font-medium text-[#007AFF] hover:text-[#0071EB] transition-colors">
               {copied ? 'Copied!' : 'Share'}
@@ -595,7 +598,10 @@ export default function Home() {
           </div>
           {/* Header row */}
           <div className="flex items-center justify-between px-5 pb-3">
-            <h1 className="text-[17px] font-semibold tracking-tight text-[#1D1D1F]">Midpoint</h1>
+            <div className="flex items-center gap-1.5">
+              <MidpointLogo size={20} />
+              <h1 className="text-[17px] font-semibold tracking-tight text-[#1D1D1F]">Midpoint</h1>
+            </div>
             <div className="flex items-center gap-3">
               {hasResults && (
                 <button onClick={shareLink} className="text-[13px] font-medium text-[#007AFF]">
@@ -671,6 +677,18 @@ function buildDisplayItems(
       travelTimes: isSelected && routeTimesForSelected ? routeTimesForSelected : r.times,
     };
   });
+}
+
+function MidpointLogo({ size = 24 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      {/* Two converging paths meeting at a central point */}
+      <circle cx="16" cy="16" r="14" fill="#007AFF" fillOpacity="0.08" />
+      <path d="M8 24L16 12L24 24" stroke="#007AFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="16" cy="12" r="3.5" fill="#007AFF" />
+      <circle cx="16" cy="12" r="1.5" fill="white" />
+    </svg>
+  );
 }
 
 function LoadingStages({ currentStage }: { currentStage: string }) {

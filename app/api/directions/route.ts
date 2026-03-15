@@ -1,5 +1,6 @@
 // POST — Fetch route polylines for each person to a destination
 // Uses Mapbox Directions for driving/walking/cycling, Google Routes for transit
+// Transit routes include step-by-step segments (walk, subway line, etc.)
 import { NextResponse } from 'next/server';
 import type { TransportMode } from '@/types';
 
@@ -16,11 +17,21 @@ interface DirectionsRequest {
   departureTime: string;
 }
 
+export interface RouteSegment {
+  travelMode: 'WALK' | 'TRANSIT';
+  durationSeconds: number;
+  polyline: [number, number][];
+  transitLineName?: string;
+  transitLineColor?: string;
+  transitLineShortName?: string;
+}
+
 interface RouteResult {
   personId: string;
   color: string;
   durationSeconds: number;
   geometry: GeoJSON.Feature<GeoJSON.LineString>;
+  segments?: RouteSegment[];
 }
 
 const MAPBOX_PROFILES: Record<string, string> = {
@@ -102,7 +113,17 @@ async function fetchGoogleRoute(
       headers: {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': apiKey,
-        'X-Goog-FieldMask': 'routes.duration,routes.polyline.encodedPolyline',
+        'X-Goog-FieldMask': [
+          'routes.duration',
+          'routes.polyline.encodedPolyline',
+          'routes.legs.steps.travelMode',
+          'routes.legs.steps.staticDuration',
+          'routes.legs.steps.polyline.encodedPolyline',
+          'routes.legs.steps.transitDetails.transitLine.name',
+          'routes.legs.steps.transitDetails.transitLine.nameShort',
+          'routes.legs.steps.transitDetails.transitLine.color',
+          'routes.legs.steps.transitDetails.transitLine.textColor',
+        ].join(','),
       },
       body: JSON.stringify({
         origin: { location: { latLng: { latitude: r.originLat, longitude: r.originLng } } },
@@ -114,7 +135,6 @@ async function fetchGoogleRoute(
     });
 
     if (!res.ok) {
-      // Fallback: straight line
       return straightLineRoute(r);
     }
 
@@ -128,6 +148,38 @@ async function fetchGoogleRoute(
     const durationStr: string = route.duration ?? '0s';
     const seconds = parseInt(durationStr.replace('s', ''), 10);
 
+    // Extract step-by-step segments for transit visualization
+    const segments: RouteSegment[] = [];
+    const legs = route.legs;
+    if (Array.isArray(legs)) {
+      for (const leg of legs) {
+        const steps = leg.steps;
+        if (!Array.isArray(steps)) continue;
+        for (const step of steps) {
+          const stepPolyline = step.polyline?.encodedPolyline;
+          if (!stepPolyline) continue;
+          const stepCoords = decodePolyline(stepPolyline);
+          const stepDurStr: string = step.staticDuration ?? '0s';
+          const stepSeconds = parseInt(stepDurStr.replace('s', ''), 10);
+
+          const segment: RouteSegment = {
+            travelMode: step.travelMode === 'TRANSIT' ? 'TRANSIT' : 'WALK',
+            durationSeconds: stepSeconds,
+            polyline: stepCoords,
+          };
+
+          if (step.travelMode === 'TRANSIT' && step.transitDetails?.transitLine) {
+            const line = step.transitDetails.transitLine;
+            segment.transitLineName = line.name ?? undefined;
+            segment.transitLineColor = line.color ?? undefined;
+            segment.transitLineShortName = line.nameShort ?? undefined;
+          }
+
+          segments.push(segment);
+        }
+      }
+    }
+
     return {
       personId: r.personId,
       color: r.color,
@@ -137,6 +189,7 @@ async function fetchGoogleRoute(
         properties: { personId: r.personId, color: r.color, duration: seconds },
         geometry: { type: 'LineString', coordinates: coords },
       },
+      segments: segments.length > 0 ? segments : undefined,
     };
   } catch {
     return straightLineRoute(r);

@@ -128,7 +128,11 @@ export function preFilterHotspots(
 ): Hotspot[] {
   if (hotspots.length === 0 || people.length === 0) return [];
 
-  // Score every hotspot
+  // Calculate geographic centroid of all people
+  const centroidLat = people.reduce((s, p) => s + p.lat, 0) / people.length;
+  const centroidLng = people.reduce((s, p) => s + p.lng, 0) / people.length;
+
+  // Score every hotspot with geographic centroid proximity bonus
   const scored = hotspots.map((h) => {
     const times = people.map((p) => estimateTransitTime(p, h, departureTime));
     let score: number;
@@ -137,20 +141,34 @@ export function preFilterHotspots(
       case 'efficiency': score = sumOfSquares(times); break;
       case 'blended': default: score = blended(times, alpha); break;
     }
+
+    // Geographic centroid proximity bonus: hotspots closer to the group's
+    // geographic center get a small score reduction (up to 10% of score).
+    // This breaks ties in favor of geographically central locations,
+    // counteracting Manhattan hub gravity.
+    const distToCentroid = haversineDistance(h.lat, h.lng, centroidLat, centroidLng);
+    const maxReasonableDist = 8000; // 8km — roughly borough-crossing distance
+    const proximityFactor = Math.min(distToCentroid / maxReasonableDist, 1.0);
+    const centroidBonus = score * 0.10 * proximityFactor;
+    score += centroidBonus;
+
     return { hotspot: h, score, times };
   });
 
   scored.sort((a, b) => a.score - b.score);
   const bestScore = scored[0].score;
-  const viabilityThreshold = bestScore * 2;
+  const viabilityThreshold = bestScore * 3;
 
-  // Reserve top candidate from each borough within viability threshold
+  // Reserve top 3 candidates from each borough within viability threshold
+  // This ensures geographic diversity instead of Manhattan saturation
+  const BOROUGH_RESERVE_SLOTS = 3;
   const reserved: typeof scored = [];
-  const seenBoroughs = new Set<string>();
+  const boroughCounts = new Map<string, number>();
   for (const entry of scored) {
     if (entry.score > viabilityThreshold) break;
-    if (!seenBoroughs.has(entry.hotspot.borough)) {
-      seenBoroughs.add(entry.hotspot.borough);
+    const bc = boroughCounts.get(entry.hotspot.borough) ?? 0;
+    if (bc < BOROUGH_RESERVE_SLOTS) {
+      boroughCounts.set(entry.hotspot.borough, bc + 1);
       reserved.push(entry);
     }
   }

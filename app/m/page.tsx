@@ -11,6 +11,17 @@ import type { SessionState, Venue } from '@/types';
 
 const Map = dynamic(() => import('@/components/Map'), { ssr: false });
 
+function MidpointLogo({ size = 24 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="14" fill="#007AFF" fillOpacity="0.08" />
+      <path d="M8 24L16 12L24 24" stroke="#007AFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="16" cy="12" r="3.5" fill="#007AFF" />
+      <circle cx="16" cy="12" r="1.5" fill="white" />
+    </svg>
+  );
+}
+
 function SharedContent() {
   const searchParams = useSearchParams();
   const [state, setState] = useState<SessionState | null>(null);
@@ -63,7 +74,10 @@ function SharedContent() {
     return (
       <div className="flex min-h-screen items-center justify-center p-8">
         <div className="text-center">
-          <h1 className="text-2xl font-bold">Midpoint</h1>
+          <div className="flex items-center justify-center gap-2">
+            <MidpointLogo size={28} />
+            <h1 className="text-2xl font-bold">Midpoint</h1>
+          </div>
           <p className="mt-2 text-muted-foreground">{error}</p>
           <a href="/" className="mt-4 inline-block text-primary underline">
             Start a new search
@@ -77,7 +91,10 @@ function SharedContent() {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold">Midpoint</h1>
+          <div className="flex items-center justify-center gap-2">
+            <MidpointLogo size={28} />
+            <h1 className="text-2xl font-bold">Midpoint</h1>
+          </div>
           <p className="mt-2 animate-pulse text-muted-foreground">Loading shared session...</p>
         </div>
       </div>
@@ -88,7 +105,10 @@ function SharedContent() {
     <div className="flex min-h-screen flex-col lg:flex-row">
       <div className="flex w-full flex-col gap-4 overflow-y-auto border-r p-4 lg:w-[420px] lg:shrink-0">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold tracking-tight">Midpoint</h1>
+          <div className="flex items-center gap-2">
+            <MidpointLogo size={24} />
+            <h1 className="text-2xl font-bold tracking-tight">Midpoint</h1>
+          </div>
           <a href="/" className="text-sm text-primary underline">
             New search
           </a>
