@@ -15,7 +15,7 @@ import type { RouteFeature } from '@/components/Map';
 
 const Map = dynamic(() => import('@/components/Map'), { ssr: false });
 
-const PERSON_COLORS = ['#E8573D', '#7C5CFC', '#3AAFB9', '#F5A623', '#E84393', '#34D399'];
+const PERSON_COLORS = ['#007AFF', '#FF9500', '#34C759', '#FF2D55', '#5856D6', '#FF3B30'];
 
 function createPerson(index: number): Person {
   return {
@@ -38,7 +38,7 @@ interface CandidateDetail {
 
 const STAGE_LABELS: Record<string, string> = {
   prefilter: 'Analyzing locations...',
-  travel_times: 'Calculating travel times...',
+  travel_times: 'Fetching live travel times...',
   scoring: 'Scoring candidates...',
   venues: 'Finding nearby spots...',
   done: 'Done!',
@@ -123,18 +123,10 @@ export default function Home() {
         signal: controller.signal,
       });
 
-      if (!res.ok) {
-        setError('Optimization failed');
-        setIsLoading(false);
-        return;
-      }
+      if (!res.ok) { setError('Optimization failed'); setIsLoading(false); return; }
 
       const reader = res.body?.getReader();
-      if (!reader) {
-        setError('No response stream');
-        setIsLoading(false);
-        return;
-      }
+      if (!reader) { setError('No response stream'); setIsLoading(false); return; }
 
       const decoder = new TextDecoder();
       let buffer = '';
@@ -169,9 +161,7 @@ export default function Home() {
               setCandidateDetails(cd);
               setUsedHeuristic(msg.usedHeuristic ?? false);
 
-              if (r?.[0]?.times) {
-                setOutlierIndex(detectOutlier(r[0].times));
-              }
+              if (r?.[0]?.times) setOutlierIndex(detectOutlier(r[0].times));
 
               const topVenue = v?.[0];
               const topCandidate = cd.find((c) => c.hotspotId === r?.[0]?.hotspotId);
@@ -193,20 +183,14 @@ export default function Home() {
                       contours_minutes: [10, 20, 30],
                     }),
                   }).then(async (isoRes) => {
-                    if (isoRes.ok && isoRes.status !== 204) {
-                      setIsochrones(await isoRes.json());
-                    }
+                    if (isoRes.ok && isoRes.status !== 204) setIsochrones(await isoRes.json());
                   }).catch(() => {});
                 }
               }
             }
 
-            if (msg.type === 'error') {
-              setError(msg.error);
-            }
-          } catch {
-            // skip malformed events
-          }
+            if (msg.type === 'error') setError(msg.error);
+          } catch {}
         }
       }
     } catch (err) {
@@ -220,35 +204,21 @@ export default function Home() {
     }
   };
 
-  const fetchRoutes = async (
-    ppl: Person[],
-    dest: { lat: number; lng: number },
-    depTime: string,
-  ) => {
+  const fetchRoutes = async (ppl: Person[], dest: { lat: number; lng: number }, depTime: string) => {
     try {
       const res = await fetch('/api/directions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           routes: ppl.map((p) => ({
-            personId: p.id,
-            originLat: p.lat,
-            originLng: p.lng,
-            destLat: dest.lat,
-            destLng: dest.lng,
-            mode: p.mode,
-            color: p.color,
+            personId: p.id, originLat: p.lat, originLng: p.lng,
+            destLat: dest.lat, destLng: dest.lng, mode: p.mode, color: p.color,
           })),
           departureTime: depTime,
         }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        setRoutes(data.routes ?? []);
-      }
-    } catch {
-      // Routes are visual enhancement — don't block on failure
-    }
+      if (res.ok) { const data = await res.json(); setRoutes(data.routes ?? []); }
+    } catch {}
   };
 
   const handleSelectVenue = (venueId: string) => {
@@ -268,8 +238,7 @@ export default function Home() {
       departureTime,
     };
     const encoded = encodeState(state);
-    const url = `${window.location.origin}/m?s=${encoded}`;
-    navigator.clipboard.writeText(url);
+    navigator.clipboard.writeText(`${window.location.origin}/m?s=${encoded}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -281,144 +250,128 @@ export default function Home() {
   return (
     <div className="flex h-screen flex-col lg:flex-row overflow-hidden">
       {/* Sidebar */}
-      <div className="flex w-full flex-col gap-5 overflow-y-auto p-5 lg:h-screen lg:w-[440px] lg:shrink-0 bg-background">
+      <div className="flex w-full flex-col overflow-y-auto lg:h-screen lg:w-[400px] lg:shrink-0 bg-[#FBFBFD] border-r border-black/[0.06]">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold tracking-tight gradient-text">midpoint</h1>
+        <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4 bg-[#FBFBFD]/80 backdrop-blur-xl border-b border-black/[0.04]">
+          <h1 className="text-[20px] font-semibold tracking-tight text-[#1D1D1F]">Midpoint</h1>
           {hasResults && (
             <button
               onClick={shareLink}
-              className="flex items-center gap-1.5 rounded-xl bg-muted/60 px-3.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted transition-colors"
+              className="flex items-center gap-1 text-[13px] font-medium text-[#007AFF] hover:text-[#0071EB] transition-colors"
             >
-              {copied ? (
-                <>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                  Copied!
-                </>
-              ) : (
-                <>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
-                  Share
-                </>
+              {copied ? 'Copied!' : 'Share'}
+              {!copied && (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
               )}
             </button>
           )}
         </div>
 
-        <p className="text-sm text-muted-foreground -mt-2">
-          Find the fairest meeting spot for your group.
-        </p>
-
-        {/* People */}
-        <div className="space-y-2.5">
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-semibold">Who&apos;s coming?</label>
-            {people.length < 6 && (
-              <button
-                onClick={addPerson}
-                className="rounded-xl bg-muted/50 px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-              >
-                + Add person
-              </button>
-            )}
-          </div>
-          {people.map((person, i) => (
-            <PersonInput
-              key={person.id}
-              person={person}
-              onUpdate={(p) => updatePerson(i, p)}
-              onRemove={() => removePerson(i)}
-              canRemove={people.length > 2}
-            />
-          ))}
-          <p className="text-[11px] text-muted-foreground/60 pl-1">
-            Click the map to set a location
-          </p>
-        </div>
-
-        <div className="h-px bg-border/60" />
-
-        <DepartureTimePicker value={departureTime} onChange={setDepartureTime} />
-        <ObjectiveSlider alpha={alpha} onChange={setAlpha} />
-
-        {/* Find button */}
-        <button
-          className="w-full h-12 rounded-2xl bg-gradient-to-r from-primary to-primary/85 text-base font-semibold text-white shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/25 hover:brightness-105 disabled:opacity-50 disabled:pointer-events-none transition-all active:scale-[0.98]"
-          onClick={findMidpoint}
-          disabled={validCount < 2 || isLoading}
-        >
-          {isLoading
-            ? 'Finding...'
-            : validCount < 2
-            ? `Add ${2 - validCount} more location${2 - validCount > 1 ? 's' : ''}`
-            : 'Find the spot'}
-        </button>
-
-        {/* Loading stages */}
-        {isLoading && (
-          <div className="rounded-2xl border border-border/40 bg-card p-4 shadow-sm">
-            <LoadingStages currentStage={loadingStage} />
-            <p className="mt-2 text-xs text-muted-foreground animate-pulse">{loadingDetail}</p>
-          </div>
-        )}
-
-        {/* Error */}
-        {error && (
-          <div className="rounded-2xl bg-red-50 border border-red-100 p-3.5 text-sm text-red-700 font-medium">
-            {error}
-          </div>
-        )}
-
-        {/* Outlier warning */}
-        {outlierIndex !== null && (
-          <div className="rounded-2xl bg-amber-50 border border-amber-100 p-3.5 text-sm text-amber-700">
-            <strong>{people[outlierIndex]?.label ?? 'Someone'}</strong> has a
-            significantly longer commute.
-          </div>
-        )}
-
-        {/* Heuristic notice */}
-        {hasResults && usedHeuristic && (
-          <div className="rounded-2xl bg-violet-50 border border-violet-100 p-3 text-xs text-violet-600">
-            Times are estimates. Real-time data requires a Google Maps API key.
-          </div>
-        )}
-
-        {/* Results */}
-        {hasResults && !isLoading && (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-semibold">
-                Top spots
-              </h2>
-              <span className="rounded-lg bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
-                {displayItems.length} found
-              </span>
+        <div className="flex flex-col gap-5 p-5">
+          {/* People */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[13px] font-medium text-[#1D1D1F]">People</span>
+              {people.length < 6 && (
+                <button
+                  onClick={addPerson}
+                  className="text-[13px] font-medium text-[#007AFF] hover:text-[#0071EB] transition-colors"
+                >
+                  Add Person
+                </button>
+              )}
             </div>
-            {displayItems.slice(0, 5).map((item, i) => (
-              <VenueCard
-                key={item.placeId}
-                venue={item}
-                people={people.filter((p) => p.lat !== 0 && p.lng !== 0)}
-                rank={i + 1}
-                isSelected={item.placeId === selectedVenueId}
-                onClick={() => handleSelectVenue(item.placeId)}
+            {people.map((person, i) => (
+              <PersonInput
+                key={person.id}
+                person={person}
+                onUpdate={(p) => updatePerson(i, p)}
+                onRemove={() => removePerson(i)}
+                canRemove={people.length > 2}
               />
             ))}
-
-            {displayItems.length > 5 && (
-              <TravelTimeGrid
-                people={people.filter((p) => p.lat !== 0 && p.lng !== 0)}
-                venues={displayItems}
-                selectedVenueId={selectedVenueId}
-                onSelectVenue={handleSelectVenue}
-              />
-            )}
+            <p className="text-[11px] text-[#86868B] pl-0.5">
+              Tap the map to set a location.
+            </p>
           </div>
-        )}
 
-        {/* Bottom spacer */}
-        <div className="h-4" />
+          <div className="h-px bg-black/[0.04]" />
+
+          <DepartureTimePicker value={departureTime} onChange={setDepartureTime} />
+          <ObjectiveSlider alpha={alpha} onChange={setAlpha} />
+
+          {/* CTA */}
+          <button
+            className="w-full h-[44px] rounded-xl bg-[#007AFF] text-[15px] font-medium text-white hover:bg-[#0071EB] disabled:opacity-40 disabled:pointer-events-none transition-colors active:opacity-80"
+            onClick={findMidpoint}
+            disabled={validCount < 2 || isLoading}
+          >
+            {isLoading
+              ? 'Finding...'
+              : validCount < 2
+              ? `Set ${2 - validCount} more location${2 - validCount > 1 ? 's' : ''}`
+              : 'Find the Spot'}
+          </button>
+
+          {/* Loading */}
+          {isLoading && (
+            <div className="rounded-xl bg-white border border-black/[0.06] p-4">
+              <LoadingStages currentStage={loadingStage} />
+              <p className="mt-2.5 text-[11px] text-[#86868B]">{loadingDetail}</p>
+            </div>
+          )}
+
+          {/* Error */}
+          {error && (
+            <div className="rounded-xl bg-[#FF3B30]/8 border border-[#FF3B30]/15 px-3.5 py-2.5 text-[13px] text-[#FF3B30] font-medium">
+              {error}
+            </div>
+          )}
+
+          {/* Outlier */}
+          {outlierIndex !== null && (
+            <div className="rounded-xl bg-[#FF9500]/8 border border-[#FF9500]/15 px-3.5 py-2.5 text-[13px] text-[#FF9500]">
+              <span className="font-semibold">{people[outlierIndex]?.label ?? 'Someone'}</span> has a significantly longer commute.
+            </div>
+          )}
+
+          {/* Heuristic notice */}
+          {hasResults && usedHeuristic && (
+            <div className="rounded-xl bg-[#5856D6]/8 border border-[#5856D6]/15 px-3.5 py-2.5 text-[12px] text-[#5856D6]">
+              Times are estimates. Live data requires a Google Maps API key.
+            </div>
+          )}
+
+          {/* Results */}
+          {hasResults && !isLoading && (
+            <div className="space-y-2.5">
+              <div className="flex items-baseline gap-2">
+                <h2 className="text-[15px] font-semibold text-[#1D1D1F]">Results</h2>
+                <span className="text-[12px] text-[#86868B]">{displayItems.length} spots found</span>
+              </div>
+              {displayItems.slice(0, 5).map((item, i) => (
+                <VenueCard
+                  key={item.placeId}
+                  venue={item}
+                  people={people.filter((p) => p.lat !== 0 && p.lng !== 0)}
+                  rank={i + 1}
+                  isSelected={item.placeId === selectedVenueId}
+                  onClick={() => handleSelectVenue(item.placeId)}
+                />
+              ))}
+              {displayItems.length > 5 && (
+                <TravelTimeGrid
+                  people={people.filter((p) => p.lat !== 0 && p.lng !== 0)}
+                  venues={displayItems}
+                  selectedVenueId={selectedVenueId}
+                  onSelectVenue={handleSelectVenue}
+                />
+              )}
+            </div>
+          )}
+
+          <div className="h-6" />
+        </div>
       </div>
 
       {/* Map */}
@@ -436,7 +389,6 @@ export default function Home() {
   );
 }
 
-// Build display items from rankings + venues, falling back to neighborhood cards
 function buildDisplayItems(
   rankings: TravelTimeResult[],
   venues: Venue[],
@@ -454,9 +406,7 @@ function buildDisplayItems(
       const route = routes.find((r) => r.personId === p.id);
       return route?.durationSeconds ?? 0;
     });
-    if (routeTimesForSelected.some((t) => t === 0)) {
-      routeTimesForSelected = null;
-    }
+    if (routeTimesForSelected.some((t) => t === 0)) routeTimesForSelected = null;
   }
 
   if (venues.length > 0) {
@@ -464,17 +414,13 @@ function buildDisplayItems(
       if (venue.placeId === selectedVenueId && routeTimesForSelected) {
         return { ...venue, travelTimes: routeTimesForSelected };
       }
-
       let bestRanking = rankings[0];
       let bestDist = Infinity;
       for (const r of rankings) {
         const cd = candidateDetails.find((c) => c.hotspotId === r.hotspotId);
         if (!cd) continue;
         const dist = Math.abs(venue.lat - cd.lat) + Math.abs(venue.lng - cd.lng);
-        if (dist < bestDist) {
-          bestDist = dist;
-          bestRanking = r;
-        }
+        if (dist < bestDist) { bestDist = dist; bestRanking = r; }
       }
       return { ...venue, travelTimes: bestRanking.times };
     });
@@ -486,10 +432,8 @@ function buildDisplayItems(
     return {
       placeId: r.hotspotId,
       name: cd?.neighborhood ?? r.hotspotId,
-      lat: cd?.lat ?? 0,
-      lng: cd?.lng ?? 0,
-      rating: 0,
-      reviewCount: 0,
+      lat: cd?.lat ?? 0, lng: cd?.lng ?? 0,
+      rating: 0, reviewCount: 0,
       types: [cd?.borough ?? ''],
       neighborhood: cd?.borough?.replace('_', ' ') ?? '',
       travelTimes: isSelected && routeTimesForSelected ? routeTimesForSelected : r.times,
@@ -497,39 +441,45 @@ function buildDisplayItems(
   });
 }
 
-// Loading stage indicator
 function LoadingStages({ currentStage }: { currentStage: string }) {
   const stages = [
-    { key: 'prefilter', label: 'Pre-filtering hotspots' },
-    { key: 'travel_times', label: 'Calculating travel times' },
-    { key: 'scoring', label: 'Scoring candidates' },
+    { key: 'prefilter', label: 'Pre-filtering' },
+    { key: 'travel_times', label: 'Travel times' },
+    { key: 'scoring', label: 'Scoring' },
     { key: 'venues', label: 'Finding venues' },
   ];
 
   const currentIndex = stages.findIndex((s) => s.key === currentStage);
 
   return (
-    <div className="space-y-2">
+    <div className="flex items-center gap-1">
       {stages.map((stage, i) => {
         const isActive = stage.key === currentStage;
         const isDone = i < currentIndex || currentStage === 'done';
 
         return (
-          <div key={stage.key} className="flex items-center gap-2.5 text-sm">
-            <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-all ${
-              isDone ? 'bg-emerald-100 text-emerald-600' :
-              isActive ? 'bg-primary text-white animate-pulse-dot shadow-sm shadow-primary/30' :
-              'bg-muted text-muted-foreground/50'
-            }`}>
-              {isDone ? (
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-              ) : (
-                i + 1
-              )}
-            </span>
-            <span className={`text-sm ${isDone ? 'text-muted-foreground' : isActive ? 'font-medium text-foreground' : 'text-muted-foreground/50'}`}>
-              {stage.label}
-            </span>
+          <div key={stage.key} className="flex items-center gap-1">
+            {i > 0 && (
+              <div className={`h-[1px] w-4 ${isDone ? 'bg-[#34C759]' : 'bg-[#D2D2D7]'} transition-colors`} />
+            )}
+            <div className="flex items-center gap-1.5">
+              <div className={`h-[18px] w-[18px] flex items-center justify-center rounded-full text-[9px] font-bold transition-all ${
+                isDone ? 'bg-[#34C759] text-white' :
+                isActive ? 'bg-[#007AFF] text-white' :
+                'bg-[#F5F5F7] text-[#86868B]'
+              }`}>
+                {isDone ? (
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                ) : (
+                  i + 1
+                )}
+              </div>
+              <span className={`text-[11px] ${
+                isDone ? 'text-[#34C759]' : isActive ? 'font-medium text-[#1D1D1F]' : 'text-[#86868B]'
+              }`}>
+                {stage.label}
+              </span>
+            </div>
           </div>
         );
       })}

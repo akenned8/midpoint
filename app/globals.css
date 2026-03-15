@@ -48,72 +48,72 @@
 }
 
 :root {
-  --background: #FDFAF7;
-  --foreground: #1a1523;
+  --background: #FFFFFF;
+  --foreground: #1D1D1F;
   --card: #FFFFFF;
-  --card-foreground: #1a1523;
+  --card-foreground: #1D1D1F;
   --popover: #FFFFFF;
-  --popover-foreground: #1a1523;
-  --primary: #E8573D;
+  --popover-foreground: #1D1D1F;
+  --primary: #007AFF;
   --primary-foreground: #FFFFFF;
-  --secondary: #F5F0EB;
-  --secondary-foreground: #1a1523;
-  --muted: #F5F0EB;
-  --muted-foreground: #8E8494;
-  --accent: #F5F0EB;
-  --accent-foreground: #1a1523;
-  --destructive: #DC2626;
-  --border: #EDE8E3;
-  --input: #EDE8E3;
-  --ring: #E8573D;
-  --chart-1: #E8573D;
-  --chart-2: #7C5CFC;
-  --chart-3: #3AAFB9;
-  --chart-4: #F5A623;
-  --chart-5: #E84393;
+  --secondary: #F5F5F7;
+  --secondary-foreground: #1D1D1F;
+  --muted: #F5F5F7;
+  --muted-foreground: #86868B;
+  --accent: #F5F5F7;
+  --accent-foreground: #1D1D1F;
+  --destructive: #FF3B30;
+  --border: #D2D2D7;
+  --input: #D2D2D7;
+  --ring: #007AFF;
+  --chart-1: #007AFF;
+  --chart-2: #5856D6;
+  --chart-3: #34C759;
+  --chart-4: #FF9500;
+  --chart-5: #FF2D55;
   --radius: 0.75rem;
-  --sidebar: #FDFAF7;
-  --sidebar-foreground: #1a1523;
-  --sidebar-primary: #E8573D;
+  --sidebar: #FBFBFD;
+  --sidebar-foreground: #1D1D1F;
+  --sidebar-primary: #007AFF;
   --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #F5F0EB;
-  --sidebar-accent-foreground: #1a1523;
-  --sidebar-border: #EDE8E3;
-  --sidebar-ring: #E8573D;
+  --sidebar-accent: #F5F5F7;
+  --sidebar-accent-foreground: #1D1D1F;
+  --sidebar-border: #D2D2D7;
+  --sidebar-ring: #007AFF;
 }
 
 .dark {
-  --background: #0F0D13;
-  --foreground: #F5F0EB;
-  --card: #1A1523;
-  --card-foreground: #F5F0EB;
-  --popover: #1A1523;
-  --popover-foreground: #F5F0EB;
-  --primary: #EF7A5C;
+  --background: #000000;
+  --foreground: #F5F5F7;
+  --card: #1C1C1E;
+  --card-foreground: #F5F5F7;
+  --popover: #1C1C1E;
+  --popover-foreground: #F5F5F7;
+  --primary: #0A84FF;
   --primary-foreground: #FFFFFF;
-  --secondary: #262030;
-  --secondary-foreground: #F5F0EB;
-  --muted: #262030;
-  --muted-foreground: #8E8494;
-  --accent: #262030;
-  --accent-foreground: #F5F0EB;
-  --destructive: #EF4444;
-  --border: rgba(255, 255, 255, 0.08);
-  --input: rgba(255, 255, 255, 0.12);
-  --ring: #EF7A5C;
-  --chart-1: #EF7A5C;
-  --chart-2: #9B7FFF;
-  --chart-3: #4ECDC4;
-  --chart-4: #FFB84D;
-  --chart-5: #FF6CB5;
-  --sidebar: #0F0D13;
-  --sidebar-foreground: #F5F0EB;
-  --sidebar-primary: #EF7A5C;
+  --secondary: #2C2C2E;
+  --secondary-foreground: #F5F5F7;
+  --muted: #2C2C2E;
+  --muted-foreground: #98989D;
+  --accent: #2C2C2E;
+  --accent-foreground: #F5F5F7;
+  --destructive: #FF453A;
+  --border: rgba(255, 255, 255, 0.1);
+  --input: rgba(255, 255, 255, 0.1);
+  --ring: #0A84FF;
+  --chart-1: #0A84FF;
+  --chart-2: #5E5CE6;
+  --chart-3: #30D158;
+  --chart-4: #FF9F0A;
+  --chart-5: #FF375F;
+  --sidebar: #000000;
+  --sidebar-foreground: #F5F5F7;
+  --sidebar-primary: #0A84FF;
   --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #262030;
-  --sidebar-accent-foreground: #F5F0EB;
-  --sidebar-border: rgba(255, 255, 255, 0.08);
-  --sidebar-ring: #EF7A5C;
+  --sidebar-accent: #2C2C2E;
+  --sidebar-accent-foreground: #F5F5F7;
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+  --sidebar-ring: #0A84FF;
 }
 
 @layer base {
@@ -128,31 +128,17 @@
   }
 }
 
-/* Smooth scrollbar */
+/* Refined scrollbar */
 .overflow-y-auto::-webkit-scrollbar {
-  width: 4px;
+  width: 6px;
 }
 .overflow-y-auto::-webkit-scrollbar-track {
   background: transparent;
 }
 .overflow-y-auto::-webkit-scrollbar-thumb {
-  background: #D0C8BF;
-  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 3px;
 }
-
-/* Gradient text utility */
-.gradient-text {
-  background: linear-gradient(135deg, #E8573D 0%, #7C5CFC 50%, #3AAFB9 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-/* Pulse dot animation */
-@keyframes pulse-dot {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(0.85); }
-}
-.animate-pulse-dot {
-  animation: pulse-dot 1.5s ease-in-out infinite;
+.overflow-y-auto::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
 }

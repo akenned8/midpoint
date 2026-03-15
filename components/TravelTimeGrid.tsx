@@ -1,4 +1,4 @@
-// N×M matrix of people × venues, color-coded
+// N×M matrix of people × venues
 'use client';
 
 import type { Person, Venue } from '@/types';
@@ -18,13 +18,11 @@ function formatTime(seconds: number): string {
   return rem > 0 ? `${hrs}h${rem}m` : `${hrs}h`;
 }
 
-function cellColor(seconds: number): string {
+function cellStyle(seconds: number): string {
   const mins = seconds / 60;
-  if (mins <= 15) return 'bg-emerald-50 text-emerald-800';
-  if (mins <= 25) return 'bg-teal-50 text-teal-800';
-  if (mins <= 35) return 'bg-amber-50 text-amber-800';
-  if (mins <= 45) return 'bg-orange-50 text-orange-800';
-  return 'bg-red-50 text-red-800';
+  if (mins <= 20) return 'text-[#34C759] bg-[#34C759]/8';
+  if (mins <= 35) return 'text-[#FF9500] bg-[#FF9500]/8';
+  return 'text-[#FF3B30] bg-[#FF3B30]/8';
 }
 
 export default function TravelTimeGrid({
@@ -36,71 +34,47 @@ export default function TravelTimeGrid({
   if (venues.length === 0 || people.length === 0) return null;
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-border/50 bg-card shadow-sm">
-      <table className="w-full text-sm">
+    <div className="overflow-x-auto rounded-xl border border-black/[0.06] bg-white">
+      <table className="w-full text-[13px]">
         <thead>
-          <tr className="border-b border-border/40">
-            <th className="p-2.5 text-left text-xs font-medium text-muted-foreground">
-              Venue
-            </th>
+          <tr className="border-b border-black/[0.04]">
+            <th className="p-2.5 text-left text-[11px] font-medium text-[#86868B]">Venue</th>
             {people.map((p) => (
-              <th key={p.id} className="p-2.5 text-center text-xs font-medium">
-                <div className="flex flex-col items-center gap-1.5">
-                  <div
-                    className="h-3 w-3 rounded-full shadow-sm"
-                    style={{ backgroundColor: p.color }}
-                  />
-                  <span className="max-w-[4rem] truncate text-muted-foreground">{p.label}</span>
+              <th key={p.id} className="p-2.5 text-center">
+                <div className="flex flex-col items-center gap-1">
+                  <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: p.color }} />
+                  <span className="text-[11px] font-medium text-[#86868B] max-w-[3.5rem] truncate">{p.label}</span>
                 </div>
               </th>
             ))}
-            <th className="p-2.5 text-center text-xs font-medium text-muted-foreground">
-              Max
-            </th>
+            <th className="p-2.5 text-center text-[11px] font-medium text-[#86868B]">Max</th>
           </tr>
         </thead>
         <tbody>
           {venues.map((venue) => {
-            const maxTime =
-              venue.travelTimes.length > 0
-                ? Math.max(...venue.travelTimes)
-                : 0;
+            const maxTime = venue.travelTimes.length > 0 ? Math.max(...venue.travelTimes) : 0;
             const isSelected = venue.placeId === selectedVenueId;
-
             return (
               <tr
                 key={venue.placeId}
-                className={`cursor-pointer border-b border-border/30 transition-colors hover:bg-primary/3 ${
-                  isSelected ? 'bg-primary/5' : ''
+                className={`cursor-pointer border-b border-black/[0.03] transition-colors hover:bg-[#F5F5F7]/60 ${
+                  isSelected ? 'bg-[#007AFF]/[0.04]' : ''
                 }`}
                 onClick={() => onSelectVenue(venue.placeId)}
               >
-                <td className="max-w-[8rem] truncate p-2.5 font-medium">
-                  {venue.name}
-                </td>
+                <td className="max-w-[7rem] truncate p-2.5 font-medium text-[#1D1D1F]">{venue.name}</td>
                 {people.map((person, i) => {
                   const time = venue.travelTimes[i];
-                  if (time == null) {
-                    return (
-                      <td key={person.id} className="p-1.5 text-center text-xs text-muted-foreground">
-                        —
-                      </td>
-                    );
-                  }
-                  const isMax = time === maxTime && people.length > 1;
+                  if (time == null) return <td key={person.id} className="p-1.5 text-center text-[#86868B]">—</td>;
                   return (
                     <td key={person.id} className="p-1.5 text-center">
-                      <span
-                        className={`inline-block rounded-lg px-2 py-0.5 text-xs font-semibold ${cellColor(time)} ${
-                          isMax ? 'ring-1 ring-orange-300' : ''
-                        }`}
-                      >
+                      <span className={`inline-block rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${cellStyle(time)}`}>
                         {formatTime(time)}
                       </span>
                     </td>
                   );
                 })}
-                <td className="p-1.5 text-center text-xs font-semibold text-muted-foreground">
+                <td className="p-1.5 text-center text-[11px] font-semibold text-[#86868B] tabular-nums">
                   {maxTime > 0 ? formatTime(maxTime) : '—'}
                 </td>
               </tr>

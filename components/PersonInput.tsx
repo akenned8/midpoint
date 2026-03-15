@@ -33,117 +33,86 @@ export default function PersonInput({
 
   const handleAddressChange = (value: string) => {
     setAddress(value);
-
     if (debounceRef.current) clearTimeout(debounceRef.current);
-
     if (value.length < 3) {
       setSuggestions([]);
       setShowSuggestions(false);
       return;
     }
-
     debounceRef.current = setTimeout(async () => {
       try {
-        const res = await fetch(
-          `/api/geocode?q=${encodeURIComponent(value)}`
-        );
+        const res = await fetch(`/api/geocode?q=${encodeURIComponent(value)}`);
         if (res.ok) {
           const data = await res.json();
           setSuggestions(data.suggestions ?? []);
           setShowSuggestions(true);
         }
-      } catch {
-        // Geocode not implemented yet — manual lat/lng entry as fallback
-      }
+      } catch {}
     }, 300);
   };
 
-  const handleSelectSuggestion = async (suggestion: {
-    placeId: string;
-    description: string;
-  }) => {
+  const handleSelectSuggestion = async (suggestion: { placeId: string; description: string }) => {
     setAddress(suggestion.description);
     setSuggestions([]);
     setShowSuggestions(false);
-
-    // Fetch lat/lng from place ID
     try {
-      const res = await fetch(
-        `/api/geocode?placeId=${encodeURIComponent(suggestion.placeId)}`
-      );
+      const res = await fetch(`/api/geocode?placeId=${encodeURIComponent(suggestion.placeId)}`);
       if (res.ok) {
         const data = await res.json();
-        if (data.lat && data.lng) {
-          onUpdate({ ...person, lat: data.lat, lng: data.lng });
-        }
+        if (data.lat && data.lng) onUpdate({ ...person, lat: data.lat, lng: data.lng });
       }
-    } catch {
-      // Geocode not implemented yet
-    }
-  };
-
-  const handleModeChange = (mode: TransportMode) => {
-    onUpdate({ ...person, mode });
-  };
-
-  const handleLabelChange = (label: string) => {
-    onUpdate({ ...person, label });
+    } catch {}
   };
 
   const hasLocation = person.lat !== 0 && person.lng !== 0;
 
   return (
-    <div className="rounded-2xl border border-border/60 bg-card p-3.5 shadow-sm transition-all hover:shadow-md">
-      <div className="flex items-center gap-2.5">
-        {/* Color dot */}
+    <div className="rounded-xl bg-[#F5F5F7] p-3">
+      {/* Top row: color, name, location badge, remove */}
+      <div className="flex items-center gap-2">
         <div
-          className="h-5 w-5 shrink-0 rounded-full shadow-sm"
+          className="h-[10px] w-[10px] shrink-0 rounded-full"
           style={{ backgroundColor: person.color }}
         />
-
-        {/* Name input */}
         <input
           value={person.label}
-          onChange={(e) => handleLabelChange(e.target.value)}
-          className="h-8 w-24 rounded-lg bg-transparent text-sm font-semibold focus:outline-none focus:bg-muted/50 px-1.5 transition-colors"
+          onChange={(e) => onUpdate({ ...person, label: e.target.value })}
+          className="h-7 w-20 bg-transparent text-[13px] font-semibold text-[#1D1D1F] focus:outline-none"
           placeholder="Name"
         />
-
-        {/* Location badge */}
         {hasLocation && (
-          <span className="ml-auto mr-1 flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-medium text-green-700">
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500" />
-            set
+          <span className="ml-auto text-[11px] font-medium text-[#34C759]">
+            Located
           </span>
         )}
-
-        {/* Remove button */}
         {canRemove && (
           <button
             onClick={onRemove}
-            className="ml-auto flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground/50 hover:bg-red-50 hover:text-red-500 transition-colors"
+            className="ml-auto flex h-5 w-5 items-center justify-center rounded-full bg-black/5 text-[#86868B] hover:bg-black/10 hover:text-[#FF3B30] transition-colors"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
               <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
             </svg>
           </button>
         )}
       </div>
 
-      {/* Address input with suggestions */}
-      <div className="relative mt-2.5">
+      {/* Address input */}
+      <div className="relative mt-2">
         <input
           value={address}
           onChange={(e) => handleAddressChange(e.target.value)}
-          placeholder="Search address or click the map..."
-          className="flex h-10 w-full rounded-xl border border-input bg-muted/30 px-3.5 text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all"
+          placeholder="Search address or tap map..."
+          className="h-[36px] w-full rounded-lg border border-black/[0.06] bg-white px-3 text-[13px] text-[#1D1D1F] placeholder:text-[#86868B] focus:outline-none focus:ring-[3px] focus:ring-[#007AFF]/15 focus:border-[#007AFF]/40 transition-all"
         />
         {showSuggestions && suggestions.length > 0 && (
-          <div className="absolute z-20 mt-1.5 w-full rounded-xl border border-border/60 bg-card shadow-xl shadow-black/8 overflow-hidden">
-            {suggestions.map((s) => (
+          <div className="absolute z-20 mt-1 w-full rounded-xl border border-black/[0.06] bg-white shadow-lg shadow-black/8 overflow-hidden">
+            {suggestions.map((s, i) => (
               <button
                 key={s.placeId}
-                className="w-full px-3.5 py-2.5 text-left text-sm hover:bg-primary/5 transition-colors first:rounded-t-xl last:rounded-b-xl"
+                className={`w-full px-3 py-2 text-left text-[13px] text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors ${
+                  i > 0 ? 'border-t border-black/[0.04]' : ''
+                }`}
                 onClick={() => handleSelectSuggestion(s)}
               >
                 {s.description}
@@ -153,20 +122,19 @@ export default function PersonInput({
         )}
       </div>
 
-      {/* Transport mode pills */}
-      <div className="mt-2.5 flex gap-1">
+      {/* Transport mode segmented control */}
+      <div className="mt-2 flex rounded-lg bg-black/[0.04] p-[2px]">
         {MODES.map((m) => (
           <button
             key={m.value}
-            onClick={() => handleModeChange(m.value)}
-            className={`flex h-8 flex-1 items-center justify-center gap-1 rounded-xl text-xs font-medium transition-all ${
+            onClick={() => onUpdate({ ...person, mode: m.value })}
+            className={`flex h-[28px] flex-1 items-center justify-center gap-1 rounded-md text-[11px] font-medium transition-all ${
               person.mode === m.value
-                ? 'bg-foreground text-background shadow-sm'
-                : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+                ? 'bg-white text-[#1D1D1F] shadow-sm shadow-black/8'
+                : 'text-[#86868B] hover:text-[#1D1D1F]'
             }`}
-            title={m.label}
           >
-            <span className="text-sm">{m.icon}</span>
+            <span className="text-[13px] leading-none">{m.icon}</span>
             <span className="hidden sm:inline">{m.label}</span>
           </button>
         ))}
