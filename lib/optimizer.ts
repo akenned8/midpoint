@@ -8,7 +8,11 @@ import {
   getTTL,
   travelTimeCacheKey,
   venueCacheKey,
+  getLearningObservations,
+  addLearningObservation,
+  medianOfObservations,
 } from '@/lib/cache';
+import { findNearestZones } from '@/lib/zones';
 
 export type PipelineStage =
   | 'prefilter'
@@ -50,7 +54,7 @@ export async function optimize(options: OptimizeOptions): Promise<OptimizeResult
 
   // Stage 1: Heuristic pre-filter
   let t0 = Date.now();
-  const candidates = preFilterHotspots(people, hotspots, objective, alpha, 16);
+  const candidates = preFilterHotspots(people, hotspots, objective, alpha, 16, departureTime);
   stages.push({ stage: 'prefilter', durationMs: Date.now() - t0, detail: `${candidates.length} candidates from ${hotspots.length} hotspots` });
 
   if (candidates.length === 0) {
@@ -85,14 +89,45 @@ export async function optimize(options: OptimizeOptions): Promise<OptimizeResult
     detail: usedHeuristic ? 'Using heuristic estimates (API unavailable)' : `${people.length}x${candidates.length} matrix from Google Routes API`,
   });
 
-  // Stage 3: Score candidates
+  // Stage 3: Score candidates (with learning cache fallback)
   t0 = Date.now();
+
+  // Batch-fetch learning cache for all zone pairs (deduplicated)
+  const learnedCache = new Map<string, number | null>();
+  if (usedHeuristic) {
+    const zonePairs = new Set<string>();
+    for (const person of people) {
+      const originZone = findNearestZones(person.lat, person.lng, 1)[0]?.zone;
+      if (!originZone) continue;
+      for (const hotspot of candidates) {
+        const destZone = findNearestZones(hotspot.lat, hotspot.lng, 1)[0]?.zone;
+        if (!destZone) continue;
+        zonePairs.add(`${person.mode}:${originZone.id}:${destZone.id}`);
+      }
+    }
+    await Promise.all(
+      [...zonePairs].map(async (key) => {
+        const [mode, oZone, dZone] = key.split(':');
+        const obs = await getLearningObservations(mode as Person['mode'], oZone, dZone);
+        learnedCache.set(key, obs && obs.length >= 2 ? medianOfObservations(obs) : null);
+      })
+    );
+  }
+
   const rankings: TravelTimeResult[] = candidates.map((hotspot, di) => {
     const times = people.map((person, pi) => {
       if (!usedHeuristic && matrix[pi]?.[di] != null) {
         return matrix[pi][di] as number;
       }
-      return estimateTransitTime(person, hotspot);
+      // Try learning cache before heuristic
+      const originZone = findNearestZones(person.lat, person.lng, 1)[0]?.zone;
+      const destZone = findNearestZones(hotspot.lat, hotspot.lng, 1)[0]?.zone;
+      if (originZone && destZone) {
+        const learnedKey = `${person.mode}:${originZone.id}:${destZone.id}`;
+        const learned = learnedCache.get(learnedKey);
+        if (learned != null) return learned;
+      }
+      return estimateTransitTime(person, hotspot, departureTime);
     });
 
     let score: number;
@@ -233,6 +268,13 @@ async function fetchTravelTimesDirectly(
         const seconds = parseInt(durationStr.replace('s', ''), 10);
 
         results[globalPi][localDi] = seconds;
+
+        // Write to learning cache (fire-and-forget)
+        const originZone = findNearestZones(people[globalPi].lat, people[globalPi].lng, 1)[0]?.zone;
+        const destZone = findNearestZones(candidates[localDi].lat, candidates[localDi].lng, 1)[0]?.zone;
+        if (originZone && destZone) {
+          addLearningObservation(people[globalPi].mode, originZone.id, destZone.id, seconds);
+        }
 
         // Cache
         const key = travelTimeCacheKey(

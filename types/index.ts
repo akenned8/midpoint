@@ -34,6 +34,19 @@ export interface TravelTimeResult {
   score: number;
 }
 
+export interface Zone {
+  id: string;
+  lat: number;
+  lng: number;
+  borough: string;
+  label: string;
+}
+
+export interface LearningObservation {
+  seconds: number;
+  timestamp: number; // Unix seconds
+}
+
 export interface Venue {
   placeId: string;
   name: string;
