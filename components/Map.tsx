@@ -19,6 +19,7 @@ interface MapProps {
   routes: RouteFeature[];
   isochrones: GeoJSON.FeatureCollection | null;
   selectedVenueId: string | null;
+  evalPin?: { lat: number; lng: number } | null;
   onMapClick?: (lat: number, lng: number) => void;
 }
 
@@ -39,6 +40,7 @@ export default function Map({
   routes,
   isochrones,
   selectedVenueId,
+  evalPin,
   onMapClick,
 }: MapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -46,6 +48,7 @@ export default function Map({
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   const venueMarkersRef = useRef<mapboxgl.Marker[]>([]);
   const routeLabelMarkersRef = useRef<mapboxgl.Marker[]>([]);
+  const evalPinMarkerRef = useRef<mapboxgl.Marker | null>(null);
 
   // Initialize map
   useEffect(() => {
@@ -315,6 +318,32 @@ export default function Map({
       map.on('load', () => updateIsochrones(isochrones));
     }
   }, [isochrones, updateIsochrones]);
+
+  // Update eval pin marker
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    evalPinMarkerRef.current?.remove();
+    evalPinMarkerRef.current = null;
+
+    if (!evalPin) return;
+
+    const el = document.createElement('div');
+    el.style.cssText = `
+      width: 36px; height: 36px; border-radius: 50%;
+      background: #FF9500; border: 3px solid white;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 10;
+    `;
+    // Pin icon SVG
+    el.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`;
+
+    evalPinMarkerRef.current = new mapboxgl.Marker({ element: el })
+      .setLngLat([evalPin.lng, evalPin.lat])
+      .addTo(map);
+  }, [evalPin]);
 
   // Fit bounds
   useEffect(() => {

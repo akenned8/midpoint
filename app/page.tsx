@@ -64,6 +64,9 @@ export default function Home() {
   const [usedHeuristic, setUsedHeuristic] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [mode, setMode] = useState<'find' | 'evaluate'>('find');
+  const [evalPin, setEvalPin] = useState<{ lat: number; lng: number } | null>(null);
+  const [evalRoutes, setEvalRoutes] = useState<RouteFeature[]>([]);
   const abortRef = useRef<AbortController | null>(null);
 
   // Mobile bottom sheet state
@@ -156,6 +159,15 @@ export default function Home() {
 
   const handleMapClick = useCallback(
     (lat: number, lng: number) => {
+      if (mode === 'evaluate') {
+        setEvalPin({ lat, lng });
+        // Fetch routes from all valid people to this pin
+        const valid = people.filter((p) => p.lat !== 0 && p.lng !== 0);
+        if (valid.length > 0) {
+          fetchRoutesToPin(valid, { lat, lng }, departureTime);
+        }
+        return;
+      }
       const emptyIdx = people.findIndex((p) => p.lat === 0 && p.lng === 0);
       if (emptyIdx >= 0) {
         const updated = [...people];
@@ -163,8 +175,25 @@ export default function Home() {
         setPeople(updated);
       }
     },
-    [people]
+    [people, mode, departureTime]
   );
+
+  const fetchRoutesToPin = async (ppl: Person[], dest: { lat: number; lng: number }, depTime: string) => {
+    try {
+      const res = await fetch('/api/directions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          routes: ppl.map((p) => ({
+            personId: p.id, originLat: p.lat, originLng: p.lng,
+            destLat: dest.lat, destLng: dest.lng, mode: p.mode, color: p.color,
+          })),
+          departureTime: depTime,
+        }),
+      });
+      if (res.ok) { const data = await res.json(); setEvalRoutes(data.routes ?? []); }
+    } catch {}
+  };
 
   const findMidpoint = async () => {
     const validPeople = people.filter((p) => p.lat !== 0 && p.lng !== 0);
@@ -301,6 +330,23 @@ export default function Home() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const resetAll = () => {
+    abortRef.current?.abort();
+    setPeople(people.map((p) => ({ ...p, lat: 0, lng: 0 })));
+    setVenues([]);
+    setRankings([]);
+    setCandidateDetails([]);
+    setRoutes([]);
+    setIsochrones(null);
+    setSelectedVenueId(null);
+    setOutlierIndex(null);
+    setError(null);
+    setEvalPin(null);
+    setEvalRoutes([]);
+    setIsLoading(false);
+    setLoadingStage('');
+  };
+
   const validCount = people.filter((p) => p.lat !== 0 && p.lng !== 0).length;
 
   // Compute the mobile sheet height
@@ -308,94 +354,209 @@ export default function Home() {
     ? sheetDragY
     : getSnapHeight(sheetSnap);
 
-  // The shared panel content
-  const panelContent = (
-    <>
-      {/* People */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <span className="text-[13px] font-medium text-[#1D1D1F]">People</span>
+  // Format seconds to human time
+  const formatTime = (seconds: number) => {
+    const mins = Math.round(seconds / 60);
+    if (mins < 60) return `${mins} min`;
+    const hrs = Math.floor(mins / 60);
+    const rem = mins % 60;
+    return rem > 0 ? `${hrs}h ${rem}m` : `${hrs}h`;
+  };
+
+  // People section (shared between modes)
+  const peopleSection = (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-[13px] font-medium text-[#1D1D1F]">People</span>
+        <div className="flex items-center gap-3">
+          {validCount > 0 && (
+            <button onClick={resetAll} className="text-[13px] font-medium text-[#FF3B30] hover:text-[#D70015] transition-colors">
+              Reset
+            </button>
+          )}
           {people.length < 6 && (
             <button onClick={addPerson} className="text-[13px] font-medium text-[#007AFF] hover:text-[#0071EB] transition-colors">
               Add Person
             </button>
           )}
         </div>
-        {people.map((person, i) => (
-          <PersonInput
-            key={person.id}
-            person={person}
-            onUpdate={(p) => updatePerson(i, p)}
-            onRemove={() => removePerson(i)}
-            canRemove={people.length > 2}
-          />
-        ))}
-        <p className="text-[11px] text-[#86868B] pl-0.5">Tap the map to set a location.</p>
       </div>
+      {people.map((person, i) => (
+        <PersonInput
+          key={person.id}
+          person={person}
+          onUpdate={(p) => updatePerson(i, p)}
+          onRemove={() => removePerson(i)}
+          canRemove={people.length > 2}
+        />
+      ))}
+      <p className="text-[11px] text-[#86868B] pl-0.5">Tap the map to set a location.</p>
+    </div>
+  );
 
-      <div className="h-px bg-black/[0.04]" />
-      <DepartureTimePicker value={departureTime} onChange={setDepartureTime} />
-      <ObjectiveSlider alpha={alpha} onChange={setAlpha} />
-
-      {/* CTA */}
+  // Mode segmented control
+  const modeSelector = (
+    <div className="flex rounded-lg bg-[#F5F5F7] p-[2px]">
       <button
-        className="w-full h-[44px] rounded-xl bg-[#007AFF] text-[15px] font-medium text-white hover:bg-[#0071EB] disabled:opacity-40 disabled:pointer-events-none transition-colors active:opacity-80"
-        onClick={findMidpoint}
-        disabled={validCount < 2 || isLoading}
+        className={`flex-1 h-[30px] rounded-md text-[12px] font-medium transition-all ${
+          mode === 'find' ? 'bg-white text-[#1D1D1F] shadow-sm shadow-black/8' : 'text-[#86868B] hover:text-[#1D1D1F]'
+        }`}
+        onClick={() => setMode('find')}
       >
-        {isLoading ? 'Finding...' : validCount < 2 ? `Set ${2 - validCount} more location${2 - validCount > 1 ? 's' : ''}` : 'Find the Spot'}
+        Find the Spot
       </button>
+      <button
+        className={`flex-1 h-[30px] rounded-md text-[12px] font-medium transition-all ${
+          mode === 'evaluate' ? 'bg-white text-[#1D1D1F] shadow-sm shadow-black/8' : 'text-[#86868B] hover:text-[#1D1D1F]'
+        }`}
+        onClick={() => setMode('evaluate')}
+      >
+        Evaluate a Spot
+      </button>
+    </div>
+  );
 
-      {/* Loading */}
-      {isLoading && (
-        <div className="rounded-xl bg-white border border-black/[0.06] p-4">
-          <LoadingStages currentStage={loadingStage} />
-          <p className="mt-2.5 text-[11px] text-[#86868B]">{loadingDetail}</p>
-        </div>
-      )}
+  // The shared panel content
+  const panelContent = (
+    <>
+      {modeSelector}
 
-      {error && (
-        <div className="rounded-xl bg-[#FF3B30]/8 border border-[#FF3B30]/15 px-3.5 py-2.5 text-[13px] text-[#FF3B30] font-medium">{error}</div>
-      )}
+      {mode === 'find' ? (
+        <>
+          {peopleSection}
+          <div className="h-px bg-black/[0.04]" />
+          <DepartureTimePicker value={departureTime} onChange={setDepartureTime} />
+          <ObjectiveSlider alpha={alpha} onChange={setAlpha} />
 
-      {outlierIndex !== null && (
-        <div className="rounded-xl bg-[#FF9500]/8 border border-[#FF9500]/15 px-3.5 py-2.5 text-[13px] text-[#FF9500]">
-          <span className="font-semibold">{people[outlierIndex]?.label ?? 'Someone'}</span> has a significantly longer commute.
-        </div>
-      )}
+          <button
+            className="w-full h-[44px] rounded-xl bg-[#007AFF] text-[15px] font-medium text-white hover:bg-[#0071EB] disabled:opacity-40 disabled:pointer-events-none transition-colors active:opacity-80"
+            onClick={findMidpoint}
+            disabled={validCount < 2 || isLoading}
+          >
+            {isLoading ? 'Finding...' : validCount < 2 ? `Set ${2 - validCount} more location${2 - validCount > 1 ? 's' : ''}` : 'Find the Spot'}
+          </button>
 
-      {hasResults && usedHeuristic && (
-        <div className="rounded-xl bg-[#5856D6]/8 border border-[#5856D6]/15 px-3.5 py-2.5 text-[12px] text-[#5856D6]">
-          Times are estimates. Live data requires a Google Maps API key.
-        </div>
-      )}
-
-      {/* Results */}
-      {hasResults && !isLoading && (
-        <div className="space-y-2.5">
-          <div className="flex items-baseline gap-2">
-            <h2 className="text-[15px] font-semibold text-[#1D1D1F]">Results</h2>
-            <span className="text-[12px] text-[#86868B]">{displayItems.length} spots found</span>
-          </div>
-          {displayItems.slice(0, 5).map((item, i) => (
-            <VenueCard
-              key={item.placeId}
-              venue={item}
-              people={people.filter((p) => p.lat !== 0 && p.lng !== 0)}
-              rank={i + 1}
-              isSelected={item.placeId === selectedVenueId}
-              onClick={() => handleSelectVenue(item.placeId)}
-            />
-          ))}
-          {displayItems.length > 5 && (
-            <TravelTimeGrid
-              people={people.filter((p) => p.lat !== 0 && p.lng !== 0)}
-              venues={displayItems}
-              selectedVenueId={selectedVenueId}
-              onSelectVenue={handleSelectVenue}
-            />
+          {isLoading && (
+            <div className="rounded-xl bg-white border border-black/[0.06] p-4">
+              <LoadingStages currentStage={loadingStage} />
+              <p className="mt-2.5 text-[11px] text-[#86868B]">{loadingDetail}</p>
+            </div>
           )}
-        </div>
+
+          {error && (
+            <div className="rounded-xl bg-[#FF3B30]/8 border border-[#FF3B30]/15 px-3.5 py-2.5 text-[13px] text-[#FF3B30] font-medium">{error}</div>
+          )}
+
+          {outlierIndex !== null && (
+            <div className="rounded-xl bg-[#FF9500]/8 border border-[#FF9500]/15 px-3.5 py-2.5 text-[13px] text-[#FF9500]">
+              <span className="font-semibold">{people[outlierIndex]?.label ?? 'Someone'}</span> has a significantly longer commute.
+            </div>
+          )}
+
+          {hasResults && usedHeuristic && (
+            <div className="rounded-xl bg-[#5856D6]/8 border border-[#5856D6]/15 px-3.5 py-2.5 text-[12px] text-[#5856D6]">
+              Times are estimates. Live data requires a Google Maps API key.
+            </div>
+          )}
+
+          {hasResults && !isLoading && (
+            <div className="space-y-2.5">
+              <div className="flex items-baseline gap-2">
+                <h2 className="text-[15px] font-semibold text-[#1D1D1F]">Results</h2>
+                <span className="text-[12px] text-[#86868B]">{displayItems.length} spots found</span>
+              </div>
+              {displayItems.slice(0, 5).map((item, i) => (
+                <VenueCard
+                  key={item.placeId}
+                  venue={item}
+                  people={people.filter((p) => p.lat !== 0 && p.lng !== 0)}
+                  rank={i + 1}
+                  isSelected={item.placeId === selectedVenueId}
+                  onClick={() => handleSelectVenue(item.placeId)}
+                />
+              ))}
+              {displayItems.length > 5 && (
+                <TravelTimeGrid
+                  people={people.filter((p) => p.lat !== 0 && p.lng !== 0)}
+                  venues={displayItems}
+                  selectedVenueId={selectedVenueId}
+                  onSelectVenue={handleSelectVenue}
+                />
+              )}
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          {peopleSection}
+          <div className="h-px bg-black/[0.04]" />
+          <DepartureTimePicker value={departureTime} onChange={setDepartureTime} />
+
+          <div className="rounded-xl bg-[#F5F5F7] p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FF9500]">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-[13px] font-medium text-[#1D1D1F]">
+                  {evalPin ? `${evalPin.lat.toFixed(4)}, ${evalPin.lng.toFixed(4)}` : 'Drop a pin on the map'}
+                </p>
+                <p className="text-[11px] text-[#86868B]">
+                  {evalPin ? 'Tap map to move pin' : 'Tap anywhere to evaluate travel times'}
+                </p>
+              </div>
+              {evalPin && (
+                <button
+                  onClick={() => { setEvalPin(null); setEvalRoutes([]); }}
+                  className="ml-auto text-[12px] font-medium text-[#FF3B30]"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
+            {/* Travel time results for the pin */}
+            {evalPin && evalRoutes.length > 0 && (
+              <div className="space-y-2 pt-1">
+                {people.filter((p) => p.lat !== 0 && p.lng !== 0).map((person) => {
+                  const route = evalRoutes.find((r) => r.personId === person.id);
+                  const seconds = route?.durationSeconds ?? 0;
+                  return (
+                    <div key={person.id} className="flex items-center gap-2">
+                      <div className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: person.color }} />
+                      <span className="text-[13px] text-[#1D1D1F] flex-1">{person.label}</span>
+                      <span className={`text-[13px] font-semibold tabular-nums ${
+                        seconds / 60 <= 20 ? 'text-[#34C759]' : seconds / 60 <= 35 ? 'text-[#FF9500]' : 'text-[#FF3B30]'
+                      }`}>
+                        {seconds > 0 ? formatTime(seconds) : '...'}
+                      </span>
+                    </div>
+                  );
+                })}
+                {evalRoutes.length > 0 && (
+                  <div className="flex justify-between pt-2 border-t border-black/[0.06] text-[11px] text-[#86868B]">
+                    <span>Avg <span className="font-semibold text-[#1D1D1F]">
+                      {formatTime(evalRoutes.reduce((s, r) => s + r.durationSeconds, 0) / evalRoutes.length)}
+                    </span></span>
+                    <span>Max <span className="font-semibold text-[#1D1D1F]">
+                      {formatTime(Math.max(...evalRoutes.map((r) => r.durationSeconds)))}
+                    </span></span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {evalPin && evalRoutes.length === 0 && validCount > 0 && (
+              <p className="text-[12px] text-[#86868B]">Calculating routes...</p>
+            )}
+
+            {!evalPin && validCount === 0 && (
+              <p className="text-[12px] text-[#86868B]">Set people locations first, then tap the map.</p>
+            )}
+          </div>
+        </>
       )}
       <div className="h-8" />
     </>
@@ -407,10 +568,11 @@ export default function Home() {
       <div className="absolute inset-0">
         <Map
           people={people}
-          venues={displayItems}
-          routes={routes}
-          isochrones={isochrones}
-          selectedVenueId={selectedVenueId}
+          venues={mode === 'find' ? displayItems : []}
+          routes={mode === 'evaluate' ? evalRoutes : routes}
+          isochrones={mode === 'find' ? isochrones : null}
+          selectedVenueId={mode === 'find' ? selectedVenueId : null}
+          evalPin={mode === 'evaluate' ? evalPin : null}
           onMapClick={handleMapClick}
         />
       </div>
