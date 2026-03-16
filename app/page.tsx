@@ -319,15 +319,47 @@ export default function Home() {
     }
   };
 
-  const shareLink = () => {
-    const state: SessionState = {
-      people: people.filter((p) => p.lat !== 0 && p.lng !== 0),
-      objective: alpha >= 0.8 ? 'fairness' : alpha <= 0.2 ? 'efficiency' : 'blended',
-      alpha, departureTime,
-    };
-    navigator.clipboard.writeText(`${window.location.origin}/m?s=${encodeState(state)}`);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const shareLink = async () => {
+    const validPeople = people.filter((p) => p.lat !== 0 && p.lng !== 0);
+    // Include all people (even those without locations) so friends can claim slots
+    const allPeople = people.map((p) => {
+      if (p.lat === 0 && p.lng === 0) return p;
+      return p;
+    });
+    try {
+      const res = await fetch('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          people: allPeople,
+          objective: alpha >= 0.8 ? 'fairness' : alpha <= 0.2 ? 'efficiency' : 'blended',
+          alpha,
+          departureTime,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        navigator.clipboard.writeText(`${window.location.origin}/s/${data.id}`);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } else {
+        // Fallback to old URL encoding if Redis is unavailable
+        const state: SessionState = { people: validPeople, objective: alpha >= 0.8 ? 'fairness' : alpha <= 0.2 ? 'efficiency' : 'blended', alpha, departureTime };
+        navigator.clipboard.writeText(`${window.location.origin}/m?s=${encodeState(state)}`);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }
+    } catch {
+      // Fallback
+      const state: SessionState = {
+        people: validPeople,
+        objective: alpha >= 0.8 ? 'fairness' : alpha <= 0.2 ? 'efficiency' : 'blended',
+        alpha, departureTime,
+      };
+      navigator.clipboard.writeText(`${window.location.origin}/m?s=${encodeState(state)}`);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   };
 
   const validCount = people.filter((p) => p.lat !== 0 && p.lng !== 0).length;
@@ -562,12 +594,10 @@ export default function Home() {
             <MidpointLogo size={24} />
             <h1 className="text-[20px] font-semibold tracking-tight text-[#1D1D1F]">Midpoint</h1>
           </div>
-          {hasResults && (
-            <button onClick={shareLink} className="flex items-center gap-1 text-[13px] font-medium text-[#007AFF] hover:text-[#0071EB] transition-colors">
-              {copied ? 'Copied!' : 'Share'}
-              {!copied && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>}
-            </button>
-          )}
+          <button onClick={shareLink} className="flex items-center gap-1 text-[13px] font-medium text-[#007AFF] hover:text-[#0071EB] transition-colors">
+            {copied ? 'Copied!' : 'Share'}
+            {!copied && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>}
+          </button>
         </div>
         <div className="flex-1 overflow-y-auto">
           <div className="flex flex-col gap-5 p-5">
@@ -604,11 +634,9 @@ export default function Home() {
               <h1 className="text-[17px] font-semibold tracking-tight text-[#1D1D1F]">Midpoint</h1>
             </div>
             <div className="flex items-center gap-3">
-              {hasResults && (
-                <button onClick={shareLink} className="text-[13px] font-medium text-[#007AFF]">
-                  {copied ? 'Copied!' : 'Share'}
-                </button>
-              )}
+              <button onClick={shareLink} className="text-[13px] font-medium text-[#007AFF]">
+                {copied ? 'Copied!' : 'Share'}
+              </button>
               {/* Quick expand/collapse */}
               <button
                 onClick={() => setSheetSnap(sheetSnap === 'full' ? 'peek' : 'full')}
