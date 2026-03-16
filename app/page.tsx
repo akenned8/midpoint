@@ -550,6 +550,7 @@ export default function Home() {
           selectedVenueId={mode === 'find' ? selectedVenueId : null}
           evalPin={mode === 'evaluate' ? evalPin : null}
           onMapClick={handleMapClick}
+          onSelectVenue={mode === 'find' ? handleSelectVenue : undefined}
         />
       </div>
 

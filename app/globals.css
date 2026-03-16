@@ -142,3 +142,29 @@
 .overflow-y-auto::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 0, 0, 0.25);
 }
+
+/* Mapbox popup styling — match Apple HIG aesthetic */
+.midpoint-popup .mapboxgl-popup-content {
+  background: rgba(251, 251, 253, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 12px;
+  padding: 10px 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
+  border: none;
+}
+.midpoint-popup .mapboxgl-popup-tip {
+  border-top-color: rgba(251, 251, 253, 0.95);
+  border-bottom-color: rgba(251, 251, 253, 0.95);
+}
+.midpoint-popup .mapboxgl-popup-close-button {
+  color: #86868B;
+  font-size: 16px;
+  padding: 4px 8px;
+  right: 2px;
+  top: 2px;
+}
+.midpoint-popup .mapboxgl-popup-close-button:hover {
+  color: #1D1D1F;
+  background: transparent;
+}

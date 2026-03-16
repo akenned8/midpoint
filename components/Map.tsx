@@ -31,6 +31,7 @@ interface MapProps {
   selectedVenueId: string | null;
   evalPin?: { lat: number; lng: number } | null;
   onMapClick?: (lat: number, lng: number) => void;
+  onSelectVenue?: (venueId: string) => void;
 }
 
 const NYC_CENTER: [number, number] = [-73.98, 40.74];
@@ -38,10 +39,35 @@ const NYC_ZOOM = 11.5;
 
 function formatDuration(seconds: number): string {
   const mins = Math.round(seconds / 60);
-  if (mins < 60) return `${mins}m`;
+  if (mins < 60) return `${mins} min`;
   const hrs = Math.floor(mins / 60);
   const rem = mins % 60;
   return rem > 0 ? `${hrs}h ${rem}m` : `${hrs}h`;
+}
+
+function escapeHtml(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function buildVenuePopupHTML(venue: Venue): string {
+  const stars = venue.rating > 0
+    ? `<div style="display:flex;align-items:center;gap:3px;">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="#FF9500" stroke="none"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 21 12 17.27 5.82 21 7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        <span style="font-size:12px;font-weight:600;color:#1D1D1F;">${venue.rating.toFixed(1)}</span>
+        ${venue.reviewCount > 0 ? `<span style="font-size:11px;color:#86868B;">(${venue.reviewCount.toLocaleString()})</span>` : ''}
+      </div>`
+    : '';
+
+  const tags = venue.types.slice(0, 2).map((t) =>
+    `<span style="display:inline-block;font-size:10px;font-weight:500;color:#86868B;background:#F5F5F7;border-radius:4px;padding:1px 5px;">${escapeHtml(t.replace(/_/g, ' '))}</span>`
+  ).join(' ');
+
+  return `<div style="font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;min-width:140px;max-width:200px;">
+    <div style="font-size:13px;font-weight:600;color:#1D1D1F;line-height:1.3;margin-bottom:4px;">${escapeHtml(venue.name)}</div>
+    ${stars}
+    ${tags ? `<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:4px;">${tags}</div>` : ''}
+    ${venue.neighborhood ? `<div style="font-size:10px;color:#86868B;margin-top:4px;">${escapeHtml(venue.neighborhood)}</div>` : ''}
+  </div>`;
 }
 
 export default function Map({
@@ -52,6 +78,7 @@ export default function Map({
   selectedVenueId,
   evalPin,
   onMapClick,
+  onSelectVenue,
 }: MapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -59,6 +86,12 @@ export default function Map({
   const venueMarkersRef = useRef<mapboxgl.Marker[]>([]);
   const routeLabelMarkersRef = useRef<mapboxgl.Marker[]>([]);
   const evalPinMarkerRef = useRef<mapboxgl.Marker | null>(null);
+
+  // Keep callbacks in refs so map event handlers stay current
+  const onMapClickRef = useRef(onMapClick);
+  onMapClickRef.current = onMapClick;
+  const onSelectVenueRef = useRef(onSelectVenue);
+  onSelectVenueRef.current = onSelectVenue;
 
   // Initialize map
   useEffect(() => {
@@ -87,10 +120,7 @@ export default function Map({
     };
   }, []);
 
-  // Keep click handler up to date
-  const onMapClickRef = useRef(onMapClick);
-  onMapClickRef.current = onMapClick;
-
+  // Map click handler (for setting locations / eval pin)
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -127,8 +157,11 @@ export default function Map({
       const marker = new mapboxgl.Marker({ element: el })
         .setLngLat([person.lng, person.lat])
         .setPopup(
-          new mapboxgl.Popup({ offset: 18 }).setHTML(
-            `<strong>${person.label}</strong><br/>${person.mode}`
+          new mapboxgl.Popup({ offset: 18, className: 'midpoint-popup' }).setHTML(
+            `<div style="font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;">
+              <div style="font-size:13px;font-weight:600;color:#1D1D1F;">${escapeHtml(person.label)}</div>
+              <div style="font-size:11px;color:#86868B;margin-top:1px;">${person.mode}</div>
+            </div>`
           )
         )
         .addTo(map);
@@ -152,24 +185,31 @@ export default function Map({
       el.style.cssText = `
         width: ${isSelected ? 24 : 16}px;
         height: ${isSelected ? 24 : 16}px;
-        border-radius: ${isSelected ? '4px' : '50%'};
+        border-radius: ${isSelected ? '6px' : '50%'};
         background: ${isSelected ? '#f97316' : '#6366f1'};
-        border: 2px solid white;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+        border: 2.5px solid white;
+        box-shadow: 0 1px 6px rgba(0,0,0,0.25);
         cursor: pointer;
         transition: all 0.2s;
         z-index: ${isSelected ? 5 : 1};
       `;
 
+      // Click to select venue (stop propagation so map click doesn't fire)
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        onSelectVenueRef.current?.(venue.placeId);
+      });
+
+      const popup = new mapboxgl.Popup({
+        offset: isSelected ? 16 : 12,
+        className: 'midpoint-popup',
+        closeButton: false,
+        maxWidth: '220px',
+      }).setHTML(buildVenuePopupHTML(venue));
+
       const marker = new mapboxgl.Marker({ element: el })
         .setLngLat([venue.lng, venue.lat])
-        .setPopup(
-          new mapboxgl.Popup({ offset: 12 }).setHTML(
-            `<strong>${venue.name}</strong><br/>` +
-            `${venue.rating ? `${venue.rating} stars` : ''} ` +
-            `${venue.types.slice(0, 2).join(', ')}`
-          )
-        )
+        .setPopup(popup)
         .addTo(map);
 
       venueMarkersRef.current.push(marker);
@@ -177,7 +217,7 @@ export default function Map({
   }, [venues, selectedVenueId]);
 
   // Update route lines (with transit segment support)
-  const updateRoutes = useCallback((routeData: RouteFeature[]) => {
+  const updateRoutes = useCallback((routeData: RouteFeature[], currentPeople: Person[]) => {
     const map = mapRef.current;
     if (!map) return;
 
@@ -195,9 +235,11 @@ export default function Map({
         for (let j = 0; j < 20; j++) {
           const segLineId = `route-seg-${i}-${j}`;
           const segOutlineId = `route-seg-outline-${i}-${j}`;
+          const segBorderId = `route-seg-border-${i}-${j}`;
           const segSourceId = `route-seg-src-${i}-${j}`;
           if (map.getLayer(segLineId)) map.removeLayer(segLineId);
           if (map.getLayer(segOutlineId)) map.removeLayer(segOutlineId);
+          if (map.getLayer(segBorderId)) map.removeLayer(segBorderId);
           if (map.getSource(segSourceId)) map.removeSource(segSourceId);
         }
       }
@@ -210,36 +252,43 @@ export default function Map({
 
       routeData.forEach((route, i) => {
         if (route.segments && route.segments.length > 0) {
-          // Render transit route with distinct walk/transit segments
           renderTransitSegments(map, route, i);
         } else {
-          // Render as a single polyline (driving/walking/cycling)
           renderSimpleRoute(map, route, i);
         }
 
-        // Add travel time label at midpoint of the route
+        // Total travel time label — positioned near origin, visually distinct
         if (route.durationSeconds > 0) {
+          const person = currentPeople.find((p) => p.id === route.personId);
+          // Place label near the start of route (offset toward the route)
           const coords = route.geometry.geometry.coordinates;
-          const midIdx = Math.floor(coords.length / 2);
-          const midCoord = coords[midIdx];
+          // Use ~15% along the route rather than midpoint
+          const labelIdx = Math.max(0, Math.floor(coords.length * 0.15));
+          const labelCoord = coords[labelIdx];
 
-          if (midCoord) {
+          if (labelCoord) {
             const el = document.createElement('div');
             el.style.cssText = `
-              background: ${route.color};
-              color: white;
-              padding: 2px 6px;
-              border-radius: 10px;
-              font-size: 11px;
-              font-weight: 600;
+              display: flex;
+              align-items: center;
+              gap: 3px;
+              background: white;
+              color: ${route.color};
+              padding: 3px 8px;
+              border-radius: 12px;
+              font-size: 12px;
+              font-weight: 700;
               white-space: nowrap;
-              box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+              box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+              border: 2px solid ${route.color};
               pointer-events: none;
+              font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
             `;
-            el.textContent = formatDuration(route.durationSeconds);
+            // Clock icon + duration
+            el.innerHTML = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="${route.color}" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>${formatDuration(route.durationSeconds)}`;
 
             const labelMarker = new mapboxgl.Marker({ element: el, anchor: 'center' })
-              .setLngLat([midCoord[0], midCoord[1]])
+              .setLngLat([labelCoord[0], labelCoord[1]])
               .addTo(map);
 
             routeLabelMarkersRef.current.push(labelMarker);
@@ -295,6 +344,7 @@ export default function Map({
       if (segment.polyline.length < 2) return;
 
       const sourceId = `route-seg-src-${routeIdx}-${segIdx}`;
+      const borderId = `route-seg-border-${routeIdx}-${segIdx}`;
       const outlineId = `route-seg-outline-${routeIdx}-${segIdx}`;
       const lineId = `route-seg-${routeIdx}-${segIdx}`;
 
@@ -310,7 +360,7 @@ export default function Map({
       map.addSource(sourceId, { type: 'geojson', data: geojson });
 
       if (segment.travelMode === 'WALK') {
-        // Walking segments: dashed line in the person's color, slightly transparent
+        // Walking segments: dashed line in the person's color
         map.addLayer({
           id: outlineId,
           type: 'line',
@@ -331,14 +381,28 @@ export default function Map({
           paint: {
             'line-color': route.color,
             'line-width': 2.5,
-            'line-opacity': 0.5,
+            'line-opacity': 0.55,
             'line-dasharray': [2, 3],
           },
         });
       } else {
-        // Transit segments: solid line in the transit line's color (or person's color)
+        // Transit segments: person-color border → white gap → transit-color core
         const lineColor = segment.transitLineColor || route.color;
 
+        // Outer border in person's color (identifies whose route this is)
+        map.addLayer({
+          id: borderId,
+          type: 'line',
+          source: sourceId,
+          layout: { 'line-join': 'round', 'line-cap': 'round' },
+          paint: {
+            'line-color': route.color,
+            'line-width': 9,
+            'line-opacity': 0.7,
+          },
+        });
+
+        // White gap between person border and transit color
         map.addLayer({
           id: outlineId,
           type: 'line',
@@ -347,10 +411,11 @@ export default function Map({
           paint: {
             'line-color': '#ffffff',
             'line-width': 7,
-            'line-opacity': 0.8,
+            'line-opacity': 0.9,
           },
         });
 
+        // Inner core in transit line color
         map.addLayer({
           id: lineId,
           type: 'line',
@@ -363,25 +428,33 @@ export default function Map({
           },
         });
 
-        // Add transit line label at segment midpoint
+        // Transit line name label — small circle badge at segment midpoint
         if (segment.transitLineShortName || segment.transitLineName) {
           const midIdx = Math.floor(segment.polyline.length / 2);
           const midCoord = segment.polyline[midIdx];
           if (midCoord) {
+            const displayName = segment.transitLineShortName || segment.transitLineName || '';
+            const isShort = displayName.length <= 2;
             const el = document.createElement('div');
             el.style.cssText = `
+              display: flex;
+              align-items: center;
+              justify-content: center;
               background: ${lineColor};
               color: white;
-              padding: 1px 5px;
-              border-radius: 8px;
+              width: ${isShort ? '20px' : 'auto'};
+              height: 20px;
+              padding: ${isShort ? '0' : '0 6px'};
+              border-radius: ${isShort ? '50%' : '10px'};
               font-size: 10px;
               font-weight: 700;
               white-space: nowrap;
               box-shadow: 0 1px 3px rgba(0,0,0,0.25);
               pointer-events: none;
-              letter-spacing: 0.3px;
+              letter-spacing: 0.2px;
+              font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
             `;
-            el.textContent = segment.transitLineShortName || segment.transitLineName || '';
+            el.textContent = displayName;
 
             const labelMarker = new mapboxgl.Marker({ element: el, anchor: 'center' })
               .setLngLat([midCoord[0], midCoord[1]])
@@ -394,8 +467,12 @@ export default function Map({
     });
   }
 
+  // Keep people ref for route labels
+  const peopleRef = useRef(people);
+  peopleRef.current = people;
+
   useEffect(() => {
-    updateRoutes(routes);
+    updateRoutes(routes, peopleRef.current);
   }, [routes, updateRoutes]);
 
   // Update isochrone layers
@@ -468,7 +545,6 @@ export default function Map({
       display: flex; align-items: center; justify-content: center;
       z-index: 10;
     `;
-    // Pin icon SVG
     el.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`;
 
     evalPinMarkerRef.current = new mapboxgl.Marker({ element: el })
