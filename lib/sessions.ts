@@ -15,6 +15,11 @@ export interface Session {
   results: SessionResults | null;
   updatedAt: number; // Unix ms — used by clients to detect changes
   createdAt: number;
+  accessCode?: string; // Optional per-session unlock code (uppercased)
+}
+
+export function normalizeCode(code: string | null | undefined): string {
+  return (code ?? '').trim().toUpperCase();
 }
 
 export interface SessionResults {
@@ -39,6 +44,7 @@ export async function createSession(
   objective: ObjectiveType,
   alpha: number,
   departureTime: string,
+  accessCode?: string,
 ): Promise<Session> {
   const id = nanoid(SESSION_ID_LENGTH);
   const now = Date.now();
@@ -52,6 +58,8 @@ export async function createSession(
     updatedAt: now,
     createdAt: now,
   };
+  const code = normalizeCode(accessCode);
+  if (code) session.accessCode = code;
   await setCached(sessionKey(id), session, SESSION_TTL);
   return session;
 }

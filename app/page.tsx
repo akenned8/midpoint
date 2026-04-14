@@ -64,6 +64,10 @@ export default function Home() {
   const [usedHeuristic, setUsedHeuristic] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareCode, setShareCode] = useState('');
+  const [shareLink, setShareLink] = useState<string | null>(null);
+  const [shareBusy, setShareBusy] = useState(false);
   const [mode, setMode] = useState<'find' | 'evaluate'>('find');
   const [evalPin, setEvalPin] = useState<{ lat: number; lng: number } | null>(null);
   const [evalRoutes, setEvalRoutes] = useState<RouteFeature[]>([]);
@@ -319,47 +323,61 @@ export default function Home() {
     }
   };
 
-  const shareLink = async () => {
+  // Generate a 4-character random access code (avoids 0/O/1/I confusion)
+  const generateCode = () => {
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let out = '';
+    for (let i = 0; i < 4; i++) out += alphabet[Math.floor(Math.random() * alphabet.length)];
+    return out;
+  };
+
+  const openShare = () => {
+    if (!shareOpen) {
+      setShareCode(generateCode());
+      setShareLink(null);
+    }
+    setShareOpen(!shareOpen);
+  };
+
+  const handleCreateShare = async () => {
+    setShareBusy(true);
+    const link = await createShareableSession(shareCode.trim().toUpperCase());
+    setShareBusy(false);
+    if (link) setShareLink(link);
+  };
+
+  const copyShareLink = () => {
+    if (!shareLink) return;
+    navigator.clipboard.writeText(shareLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  // Build a session and return the link + the code that protects it
+  const createShareableSession = async (accessCode: string): Promise<string | null> => {
     const validPeople = people.filter((p) => p.lat !== 0 && p.lng !== 0);
-    // Include all people (even those without locations) so friends can claim slots
-    const allPeople = people.map((p) => {
-      if (p.lat === 0 && p.lng === 0) return p;
-      return p;
-    });
+    const allPeople = people;
+    const objective = alpha >= 0.8 ? 'fairness' : alpha <= 0.2 ? 'efficiency' : 'blended';
     try {
       const res = await fetch('/api/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           people: allPeople,
-          objective: alpha >= 0.8 ? 'fairness' : alpha <= 0.2 ? 'efficiency' : 'blended',
+          objective,
           alpha,
           departureTime,
+          accessCode: accessCode || undefined,
         }),
       });
       if (res.ok) {
         const data = await res.json();
-        navigator.clipboard.writeText(`${window.location.origin}/s/${data.id}`);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      } else {
-        // Fallback to old URL encoding if Redis is unavailable
-        const state: SessionState = { people: validPeople, objective: alpha >= 0.8 ? 'fairness' : alpha <= 0.2 ? 'efficiency' : 'blended', alpha, departureTime };
-        navigator.clipboard.writeText(`${window.location.origin}/m?s=${encodeState(state)}`);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        return `${window.location.origin}/s/${data.id}`;
       }
-    } catch {
-      // Fallback
-      const state: SessionState = {
-        people: validPeople,
-        objective: alpha >= 0.8 ? 'fairness' : alpha <= 0.2 ? 'efficiency' : 'blended',
-        alpha, departureTime,
-      };
-      navigator.clipboard.writeText(`${window.location.origin}/m?s=${encodeState(state)}`);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
+    } catch {}
+    // Fallback: URL-encoded state (no access code support)
+    const state: SessionState = { people: validPeople, objective, alpha, departureTime };
+    return `${window.location.origin}/m?s=${encodeState(state)}`;
   };
 
   const validCount = people.filter((p) => p.lat !== 0 && p.lng !== 0).length;
@@ -416,6 +434,93 @@ export default function Home() {
       <p className="font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--ink-muted)] pl-0.5">
         Tap the map to set a location
       </p>
+    </div>
+  );
+
+  // Share popover — appears below the Share button
+  const sharePopover = shareOpen && (
+    <div className="absolute right-0 top-full mt-2 w-[300px] z-40 rounded-sm border border-[var(--ink)] bg-[var(--card)] shadow-[0_12px_32px_rgba(20,23,31,0.18)] anim-fade-up">
+      <div className="px-4 py-3 border-b border-[var(--rule)] bg-[var(--paper-deep)]/40 flex items-center justify-between">
+        <span className="eyebrow !flex-none after:hidden">Share session</span>
+        <button
+          type="button"
+          onClick={() => setShareOpen(false)}
+          className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--ink-muted)] hover:text-[var(--ink)]"
+        >
+          Close ×
+        </button>
+      </div>
+      <div className="p-4 space-y-3">
+        {!shareLink ? (
+          <>
+            <div>
+              <label className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--ink-muted)]">
+                Access code
+              </label>
+              <div className="mt-1.5 flex gap-2">
+                <input
+                  value={shareCode}
+                  onChange={(e) => setShareCode(e.target.value.toUpperCase().slice(0, 8))}
+                  placeholder="CODE"
+                  maxLength={8}
+                  className="h-[42px] flex-1 rounded-sm border border-[var(--rule)] bg-[var(--paper)] px-3 font-mono text-[16px] tracking-[0.2em] uppercase text-center text-[var(--ink)] placeholder:text-[var(--ink-muted)] focus:outline-none focus:border-[var(--ink)] transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShareCode(generateCode())}
+                  className="h-[42px] w-[42px] rounded-sm border border-[var(--rule)] bg-[var(--card)] text-[var(--ink)] hover:bg-[var(--paper-deep)]/50 transition-colors"
+                  title="Regenerate"
+                  aria-label="Regenerate"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mx-auto">
+                    <path d="M21 12a9 9 0 1 1-3-6.7L21 8" /><polyline points="21 3 21 8 16 8" />
+                  </svg>
+                </button>
+              </div>
+              <p className="mt-1.5 font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--ink-muted)]">
+                Friends will need this to view the session
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleCreateShare}
+              disabled={shareBusy || !shareCode.trim()}
+              className="w-full h-[44px] rounded-sm bg-[var(--ink)] text-[12px] font-mono uppercase tracking-[0.16em] text-[var(--paper)] hover:bg-[var(--signal-deep)] disabled:opacity-30 disabled:pointer-events-none transition-colors active:scale-[0.99]"
+            >
+              {shareBusy ? 'Creating…' : 'Create share link →'}
+            </button>
+          </>
+        ) : (
+          <>
+            <div>
+              <label className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--ink-muted)]">
+                Link
+              </label>
+              <div className="mt-1.5 rounded-sm border border-[var(--rule)] bg-[var(--paper)] px-3 py-2.5 font-mono text-[11px] text-[var(--ink)] break-all">
+                {shareLink}
+              </div>
+            </div>
+            <div>
+              <label className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--ink-muted)]">
+                Access code
+              </label>
+              <div className="mt-1.5 rounded-sm border-2 border-[var(--ink)] bg-[var(--paper-deep)]/50 py-3 font-mono text-[26px] font-bold tracking-[0.3em] text-center text-[var(--ink)]">
+                {shareCode || '—'}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={copyShareLink}
+              className="w-full h-[44px] rounded-sm bg-[var(--ink)] text-[12px] font-mono uppercase tracking-[0.16em] text-[var(--paper)] hover:bg-[var(--signal-deep)] transition-colors active:scale-[0.99]"
+            >
+              {copied ? '✓ Link copied' : 'Copy link'}
+            </button>
+            <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--ink-muted)] text-center leading-relaxed">
+              Send the link & text the code separately
+            </p>
+          </>
+        )}
+      </div>
     </div>
   );
 
@@ -615,7 +720,7 @@ export default function Home() {
       </div>
 
       {/* Mobile floating header — visible on phones above the map */}
-      <div className="lg:hidden absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-4 pt-[max(env(safe-area-inset-top),0.75rem)] pb-3">
+      <div className="lg:hidden absolute top-0 left-0 right-0 z-30 flex items-start justify-between px-4 pt-[max(env(safe-area-inset-top),0.75rem)] pb-3">
         <div className="flex items-center gap-2 rounded-sm border border-[var(--rule)] bg-[var(--card)] px-2.5 py-1.5 shadow-[0_2px_12px_rgba(20,23,31,0.08)]">
           <MidpointLogo size={18} />
           <span className="font-display text-[16px] leading-none text-[var(--ink)]" style={{ fontVariationSettings: '"opsz" 144' }}>
@@ -625,13 +730,16 @@ export default function Home() {
             NYC
           </span>
         </div>
-        <button
-          type="button"
-          onClick={shareLink}
-          className="rounded-sm border border-[var(--rule)] bg-[var(--card)] px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--ink)] hover:bg-[var(--ink)] hover:text-[var(--paper)] transition-colors shadow-[0_2px_12px_rgba(20,23,31,0.08)]"
-        >
-          {copied ? '✓ Copied' : 'Share'}
-        </button>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={openShare}
+            className="rounded-sm border border-[var(--rule)] bg-[var(--card)] px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--ink)] hover:bg-[var(--ink)] hover:text-[var(--paper)] transition-colors shadow-[0_2px_12px_rgba(20,23,31,0.08)]"
+          >
+            Share
+          </button>
+          {sharePopover}
+        </div>
       </div>
 
       {/* Desktop sidebar */}
@@ -650,13 +758,16 @@ export default function Home() {
                 </p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={shareLink}
-              className="rounded-sm border border-[var(--rule)] bg-[var(--card)] px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--ink)] hover:bg-[var(--ink)] hover:text-[var(--paper)] transition-colors"
-            >
-              {copied ? '✓ Copied' : 'Share ↗'}
-            </button>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={openShare}
+                className="rounded-sm border border-[var(--rule)] bg-[var(--card)] px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--ink)] hover:bg-[var(--ink)] hover:text-[var(--paper)] transition-colors"
+              >
+                Share ↗
+              </button>
+              {sharePopover}
+            </div>
           </div>
         </div>
         <div className="flex-1 overflow-y-auto">

@@ -2,7 +2,21 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-const PUBLIC_PATHS = ['/login', '/api/auth'];
+// Routes always public: login, the auth endpoint, shared session pages, and
+// every API the shared-session page needs to call. Shared sessions handle
+// their own per-session access code separately from the global passphrase.
+const PUBLIC_PATHS = [
+  '/login',
+  '/api/auth',
+  '/s/',
+  '/api/sessions',
+  '/api/optimize',
+  '/api/directions',
+  '/api/isochrones',
+  '/api/geocode',
+  '/api/venues',
+  '/api/times',
+];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

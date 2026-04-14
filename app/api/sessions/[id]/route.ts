@@ -1,18 +1,35 @@
 // GET — Fetch session state (used for polling)
 // PATCH — Update a person or session settings or store results
 import { NextResponse } from 'next/server';
-import { getSession, updateSession } from '@/lib/sessions';
-import type { Session, SessionResults } from '@/lib/sessions';
+import { getSession, updateSession, normalizeCode } from '@/lib/sessions';
+import type { SessionResults } from '@/lib/sessions';
 import type { Person, ObjectiveType } from '@/types';
 
+// Pull a session-unlock code from a request — header preferred, query fallback
+function extractCode(request: Request): string {
+  const header = request.headers.get('x-session-code');
+  if (header) return normalizeCode(header);
+  const url = new URL(request.url);
+  return normalizeCode(url.searchParams.get('code'));
+}
+
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
   const session = await getSession(id);
   if (!session) {
     return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+  }
+  if (session.accessCode) {
+    const provided = extractCode(request);
+    if (provided !== session.accessCode) {
+      return NextResponse.json(
+        { locked: true, peopleCount: session.people.length },
+        { status: 401 },
+      );
+    }
   }
   return NextResponse.json(session);
 }
@@ -42,6 +59,12 @@ export async function PATCH(
   const session = await getSession(id);
   if (!session) {
     return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+  }
+  if (session.accessCode) {
+    const provided = extractCode(request);
+    if (provided !== session.accessCode) {
+      return NextResponse.json({ locked: true }, { status: 401 });
+    }
   }
 
   let body: PatchBody;

@@ -39,6 +39,16 @@ function setClaimedIndex(sessionId: string, index: number): void {
   localStorage.setItem(`midpoint-claim-${sessionId}`, String(index));
 }
 
+function getStoredCode(sessionId: string): string {
+  if (typeof window === 'undefined') return '';
+  return localStorage.getItem(`midpoint-code-${sessionId}`) ?? '';
+}
+
+function storeCode(sessionId: string, code: string): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(`midpoint-code-${sessionId}`, code.trim().toUpperCase());
+}
+
 interface CandidateDetail {
   hotspotId: string;
   neighborhood: string;
@@ -50,10 +60,10 @@ interface CandidateDetail {
 function MidpointLogo({ size = 24 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="16" cy="16" r="14" fill="#007AFF" fillOpacity="0.08" />
-      <path d="M8 24L16 12L24 24" stroke="#007AFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx="16" cy="12" r="3.5" fill="#007AFF" />
-      <circle cx="16" cy="12" r="1.5" fill="white" />
+      <circle cx="16" cy="16" r="15" stroke="#14171F" strokeWidth="1.25" fill="#FBF8EE" />
+      <path d="M5 24 L16 16 L27 24" stroke="#14171F" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M16 16 L16 5" stroke="#14171F" strokeWidth="1.5" strokeLinecap="round" />
+      <circle cx="16" cy="16" r="3.5" fill="#1F3FE0" stroke="#14171F" strokeWidth="1.25" />
     </svg>
   );
 }
@@ -64,6 +74,10 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [locked, setLocked] = useState(false);
+  const [unlockCode, setUnlockCode] = useState('');
+  const [unlockError, setUnlockError] = useState<string | null>(null);
+  const codeRef = useRef<string>('');
   const [myIndex, setMyIndex] = useState<number | null>(null);
   const [routes, setRoutes] = useState<RouteFeature[]>([]);
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
@@ -121,22 +135,34 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
 
   // Fetch session initially
   useEffect(() => {
+    codeRef.current = getStoredCode(sessionId);
+    setUnlockCode(codeRef.current);
     fetchSession();
     const saved = getClaimedIndex(sessionId);
     if (saved != null) setMyIndex(saved);
   }, [sessionId]);
 
-  // Poll for updates
+  // Poll for updates (skip while locked)
   useEffect(() => {
+    if (locked) return;
     pollRef.current = setInterval(() => {
       fetchSession(true);
     }, POLL_INTERVAL);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [sessionId]);
+  }, [sessionId, locked]);
+
+  function authHeaders(): Record<string, string> {
+    return codeRef.current ? { 'x-session-code': codeRef.current } : {};
+  }
 
   const fetchSession = async (silent = false) => {
     try {
-      const res = await fetch(`/api/sessions/${sessionId}`);
+      const res = await fetch(`/api/sessions/${sessionId}`, { headers: authHeaders() });
+      if (res.status === 401) {
+        setLocked(true);
+        setLoading(false);
+        return;
+      }
       if (!res.ok) {
         if (res.status === 404) setError('Session not found or expired');
         else setError('Failed to load session');
@@ -144,6 +170,7 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
         return;
       }
       const data: Session = await res.json();
+      setLocked(false);
 
       // Only update if data actually changed (avoid flickering)
       if (data.updatedAt !== lastUpdatedAt.current) {
@@ -161,15 +188,38 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
     try {
       const res = await fetch(`/api/sessions/${sessionId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify(body),
       });
+      if (res.status === 401) { setLocked(true); return; }
       if (res.ok) {
         const data: Session = await res.json();
         lastUpdatedAt.current = data.updatedAt;
         setSession(data);
       }
     } catch {}
+  };
+
+  const handleUnlock = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setUnlockError(null);
+    const code = unlockCode.trim().toUpperCase();
+    if (!code) { setUnlockError('Enter the access code'); return; }
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}`, {
+        headers: { 'x-session-code': code },
+      });
+      if (res.status === 401) { setUnlockError('Wrong code — try again'); return; }
+      if (!res.ok) { setUnlockError('Failed to unlock'); return; }
+      codeRef.current = code;
+      storeCode(sessionId, code);
+      const data: Session = await res.json();
+      setSession(data);
+      lastUpdatedAt.current = data.updatedAt;
+      setLocked(false);
+    } catch {
+      setUnlockError('Failed to unlock');
+    }
   };
 
   // Claim a person slot
@@ -375,29 +425,73 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
   // Loading / error states
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex min-h-[100dvh] items-center justify-center paper-grain">
         <div className="text-center">
-          <div className="flex items-center justify-center gap-2 mb-2">
+          <div className="flex items-center justify-center gap-2.5 mb-3">
             <MidpointLogo size={28} />
-            <h1 className="text-[20px] font-semibold text-[#1D1D1F]">Midpoint</h1>
+            <h1 className="font-display text-[26px] text-[var(--ink)]" style={{ fontVariationSettings: '"opsz" 144' }}>Midpoint</h1>
           </div>
-          <p className="text-[13px] text-[#86868B] animate-pulse">Loading session...</p>
+          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--ink-muted)] animate-pulse">Loading session…</p>
         </div>
+      </div>
+    );
+  }
+
+  if (locked) {
+    return (
+      <div className="flex min-h-[100dvh] items-center justify-center paper-grain px-5">
+        <form onSubmit={handleUnlock} className="w-full max-w-[360px] anim-fade-up">
+          <div className="flex items-center justify-center gap-2.5 mb-5">
+            <MidpointLogo size={28} />
+            <h1 className="font-display text-[26px] text-[var(--ink)]" style={{ fontVariationSettings: '"opsz" 144' }}>Midpoint</h1>
+          </div>
+          <div className="rounded-sm border border-[var(--rule)] bg-[var(--card)] p-5">
+            <div className="eyebrow mb-3">Private session</div>
+            <h2 className="font-display text-[22px] leading-tight text-[var(--ink)] mb-1.5" style={{ fontVariationSettings: '"opsz" 144, "SOFT" 30' }}>
+              Enter the access code
+            </h2>
+            <p className="font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--ink-muted)] mb-4">
+              Ask whoever sent you the link
+            </p>
+            <input
+              autoFocus
+              value={unlockCode}
+              onChange={(e) => { setUnlockCode(e.target.value.toUpperCase()); setUnlockError(null); }}
+              placeholder="CODE"
+              maxLength={12}
+              className="h-[52px] w-full rounded-sm border border-[var(--rule)] bg-[var(--paper)] px-4 font-mono text-[20px] tracking-[0.3em] uppercase text-center text-[var(--ink)] placeholder:text-[var(--ink-muted)] focus:outline-none focus:border-[var(--ink)] transition-colors"
+            />
+            {unlockError && (
+              <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--hot)]">
+                {unlockError}
+              </p>
+            )}
+            <button
+              type="submit"
+              className="mt-4 w-full h-[48px] rounded-sm bg-[var(--ink)] text-[12px] font-mono uppercase tracking-[0.18em] text-[var(--paper)] hover:bg-[var(--signal-deep)] transition-colors active:scale-[0.99]"
+            >
+              Unlock →
+            </button>
+          </div>
+          <a href="/" className="block mt-4 text-center font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--ink-muted)] hover:text-[var(--ink)]">
+            ← Start a new session
+          </a>
+        </form>
       </div>
     );
   }
 
   if (error || !session) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex min-h-[100dvh] items-center justify-center paper-grain">
         <div className="text-center">
-          <div className="flex items-center justify-center gap-2 mb-2">
+          <div className="flex items-center justify-center gap-2.5 mb-3">
             <MidpointLogo size={28} />
-            <h1 className="text-[20px] font-semibold text-[#1D1D1F]">Midpoint</h1>
+            <h1 className="font-display text-[26px] text-[var(--ink)]" style={{ fontVariationSettings: '"opsz" 144' }}>Midpoint</h1>
           </div>
-          <p className="text-[13px] text-[#86868B] mt-2">{error ?? 'Session not found'}</p>
-          <a href="/" className="mt-4 inline-block text-[13px] font-medium text-[#007AFF]">
-            Start a new session
+          <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--ink-muted)] mt-2">{error ?? 'Session not found'}</p>
+          <a href="/" className="mt-5 inline-block font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--signal)] hover:text-[var(--signal-deep)]">
+            Start a new session →
           </a>
         </div>
       </div>

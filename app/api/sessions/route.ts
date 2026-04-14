@@ -8,6 +8,7 @@ interface CreateSessionBody {
   objective?: ObjectiveType;
   alpha?: number;
   departureTime?: string;
+  accessCode?: string;
 }
 
 export async function POST(request: Request) {
@@ -28,9 +29,10 @@ export async function POST(request: Request) {
       body.objective ?? 'blended',
       body.alpha ?? 0.7,
       body.departureTime ?? 'now',
+      body.accessCode,
     );
 
-    return NextResponse.json({ id: session.id, session });
+    return NextResponse.json({ id: session.id, accessCode: session.accessCode ?? null, session });
   } catch (err) {
     console.error('Failed to create session:', err);
     return NextResponse.json({ error: 'Failed to create session' }, { status: 500 });
