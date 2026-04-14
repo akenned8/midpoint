@@ -10,13 +10,19 @@ interface ObjectiveSliderProps {
 
 export default function ObjectiveSlider({ alpha, onChange }: ObjectiveSliderProps) {
   const label = alpha >= 0.8 ? 'Fairest' : alpha >= 0.4 ? 'Balanced' : 'Fastest';
-  const labelColor = alpha >= 0.8 ? 'text-[#5856D6]' : alpha >= 0.4 ? 'text-[#FF9500]' : 'text-[#34C759]';
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <span className="text-[13px] font-medium text-[#1D1D1F]">Priority</span>
-        <span className={`text-[13px] font-semibold ${labelColor}`}>{label}</span>
+    <div className="space-y-2.5">
+      <div className="flex items-baseline justify-between">
+        <span className="eyebrow">03 / Priority</span>
+      </div>
+      <div className="flex items-baseline justify-between">
+        <span className="font-display text-[20px] text-[var(--ink)]" style={{ fontVariationSettings: '"opsz" 144' }}>
+          {label}
+        </span>
+        <span className="font-mono text-[11px] tnum text-[var(--ink-muted)]">
+          α = {alpha.toFixed(2)}
+        </span>
       </div>
       <Slider
         value={[alpha * 100]}
@@ -27,9 +33,9 @@ export default function ObjectiveSlider({ alpha, onChange }: ObjectiveSliderProp
         min={0}
         max={100}
         step={5}
-        className="w-full"
+        className="w-full py-1"
       />
-      <div className="flex justify-between text-[11px] text-[#86868B]">
+      <div className="flex justify-between font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--ink-muted)]">
         <span>Fastest overall</span>
         <span>Fairest for all</span>
       </div>

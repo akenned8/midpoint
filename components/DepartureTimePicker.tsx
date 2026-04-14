@@ -54,39 +54,41 @@ export default function DepartureTimePicker({ value, onChange }: DepartureTimePi
     return local.toISOString().slice(0, 16);
   };
 
+  const allOptions = [...presets, { label: 'Custom', value: '__custom__' }];
+
   return (
     <div className="space-y-2.5">
-      <span className="text-[13px] font-medium text-[#1D1D1F]">When</span>
-      <div className="flex rounded-lg bg-[#F5F5F7] p-[2px]">
-        {presets.map((p) => (
-          <button
-            key={p.value}
-            className={`flex-1 h-[30px] rounded-md text-[12px] font-medium transition-all ${
-              value === p.value && !showCustom
-                ? 'bg-white text-[#1D1D1F] shadow-sm shadow-black/8'
-                : 'text-[#86868B] hover:text-[#1D1D1F]'
-            }`}
-            onClick={() => { onChange(p.value); setShowCustom(false); }}
-          >
-            {p.label}
-          </button>
-        ))}
-        <button
-          className={`flex-1 h-[30px] rounded-md text-[12px] font-medium transition-all ${
-            (!isPreset || showCustom)
-              ? 'bg-white text-[#1D1D1F] shadow-sm shadow-black/8'
-              : 'text-[#86868B] hover:text-[#1D1D1F]'
-          }`}
-          onClick={() => setShowCustom(true)}
-        >
-          Custom
-        </button>
+      <div className="eyebrow">02 / When</div>
+      <div className={`grid border border-[var(--rule)] rounded-sm overflow-hidden`} style={{ gridTemplateColumns: `repeat(${allOptions.length}, 1fr)` }}>
+        {allOptions.map((p, i) => {
+          const isCustom = p.value === '__custom__';
+          const isActive = isCustom ? (!isPreset || showCustom) : (value === p.value && !showCustom);
+          return (
+            <button
+              key={p.value}
+              type="button"
+              className={`h-[34px] text-[11px] font-mono uppercase tracking-[0.08em] transition-colors ${
+                i > 0 ? 'border-l border-[var(--rule)]' : ''
+              } ${
+                isActive
+                  ? 'bg-[var(--ink)] text-[var(--paper)]'
+                  : 'bg-[var(--card)] text-[var(--ink-muted)] hover:text-[var(--ink)] hover:bg-[var(--paper-deep)]/50'
+              }`}
+              onClick={() => {
+                if (isCustom) setShowCustom(true);
+                else { onChange(p.value); setShowCustom(false); }
+              }}
+            >
+              {p.label}
+            </button>
+          );
+        })}
       </div>
 
       {showCustom && (
         <input
           type="datetime-local"
-          className="h-[36px] w-full rounded-lg border border-[#D2D2D7] bg-white px-3 text-[13px] text-[#1D1D1F] focus:outline-none focus:ring-[3px] focus:ring-[#007AFF]/15 focus:border-[#007AFF]/40 transition-all"
+          className="h-[40px] w-full rounded-sm border border-[var(--rule)] bg-[var(--paper)] px-3 text-[13px] text-[var(--ink)] focus:outline-none focus:border-[var(--ink)] transition-colors"
           value={toLocalInput(value)}
           onChange={(e) => { if (e.target.value) onChange(new Date(e.target.value).toISOString()); }}
           step={900}

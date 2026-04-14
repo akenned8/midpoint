@@ -12,17 +12,17 @@ interface TravelTimeGridProps {
 
 function formatTime(seconds: number): string {
   const mins = Math.round(seconds / 60);
-  if (mins < 60) return `${mins}m`;
+  if (mins < 60) return `${mins}′`;
   const hrs = Math.floor(mins / 60);
   const rem = mins % 60;
-  return rem > 0 ? `${hrs}h${rem}m` : `${hrs}h`;
+  return rem > 0 ? `${hrs}h${rem}` : `${hrs}h`;
 }
 
-function cellStyle(seconds: number): string {
+function cellColor(seconds: number): string {
   const mins = seconds / 60;
-  if (mins <= 20) return 'text-[#34C759] bg-[#34C759]/8';
-  if (mins <= 35) return 'text-[#FF9500] bg-[#FF9500]/8';
-  return 'text-[#FF3B30] bg-[#FF3B30]/8';
+  if (mins <= 20) return 'text-[var(--good)]';
+  if (mins <= 35) return 'text-[var(--warn)]';
+  return 'text-[var(--hot)]';
 }
 
 export default function TravelTimeGrid({
@@ -34,20 +34,20 @@ export default function TravelTimeGrid({
   if (venues.length === 0 || people.length === 0) return null;
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-black/[0.06] bg-white">
-      <table className="w-full text-[13px]">
+    <div className="overflow-x-auto rounded-sm border border-[var(--rule)] bg-[var(--card)]">
+      <table className="w-full text-[12px]">
         <thead>
-          <tr className="border-b border-black/[0.04]">
-            <th className="p-2.5 text-left text-[11px] font-medium text-[#86868B]">Venue</th>
+          <tr className="border-b border-[var(--rule)] bg-[var(--paper-deep)]/40">
+            <th className="px-2.5 py-2 text-left font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--ink-muted)]">Spot</th>
             {people.map((p) => (
-              <th key={p.id} className="p-2.5 text-center">
+              <th key={p.id} className="px-2 py-2 text-center">
                 <div className="flex flex-col items-center gap-1">
-                  <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: p.color }} />
-                  <span className="text-[11px] font-medium text-[#86868B] max-w-[3.5rem] truncate">{p.label}</span>
+                  <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: p.color }} />
+                  <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--ink-muted)] max-w-[3rem] truncate">{p.label}</span>
                 </div>
               </th>
             ))}
-            <th className="p-2.5 text-center text-[11px] font-medium text-[#86868B]">Max</th>
+            <th className="px-2 py-2 text-center font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--ink-muted)]">Max</th>
           </tr>
         </thead>
         <tbody>
@@ -57,24 +57,24 @@ export default function TravelTimeGrid({
             return (
               <tr
                 key={venue.placeId}
-                className={`cursor-pointer border-b border-black/[0.03] transition-colors hover:bg-[#F5F5F7]/60 ${
-                  isSelected ? 'bg-[#007AFF]/[0.04]' : ''
+                className={`cursor-pointer border-b border-[var(--rule)]/60 last:border-b-0 transition-colors ${
+                  isSelected ? 'bg-[var(--ink)]/[0.04]' : 'hover:bg-[var(--paper-deep)]/30'
                 }`}
                 onClick={() => onSelectVenue(venue.placeId)}
               >
-                <td className="max-w-[7rem] truncate p-2.5 font-medium text-[#1D1D1F]">{venue.name}</td>
+                <td className="max-w-[8rem] truncate px-2.5 py-2 font-display text-[13px] text-[var(--ink)]" style={{ fontVariationSettings: '"opsz" 144' }}>{venue.name}</td>
                 {people.map((person, i) => {
                   const time = venue.travelTimes[i];
-                  if (time == null) return <td key={person.id} className="p-1.5 text-center text-[#86868B]">—</td>;
+                  if (time == null) return <td key={person.id} className="px-1.5 py-2 text-center text-[var(--ink-muted)]">—</td>;
                   return (
-                    <td key={person.id} className="p-1.5 text-center">
-                      <span className={`inline-block rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${cellStyle(time)}`}>
+                    <td key={person.id} className="px-1.5 py-2 text-center">
+                      <span className={`font-mono text-[11px] font-semibold tnum ${cellColor(time)}`}>
                         {formatTime(time)}
                       </span>
                     </td>
                   );
                 })}
-                <td className="p-1.5 text-center text-[11px] font-semibold text-[#86868B] tabular-nums">
+                <td className="px-1.5 py-2 text-center font-mono text-[11px] font-semibold text-[var(--ink)] tnum">
                   {maxTime > 0 ? formatTime(maxTime) : '—'}
                 </td>
               </tr>

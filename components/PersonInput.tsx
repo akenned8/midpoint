@@ -99,80 +99,98 @@ export default function PersonInput({
   const hasLocation = person.lat !== 0 && person.lng !== 0;
 
   return (
-    <div className="rounded-xl bg-[#F5F5F7] p-3">
-      {/* Top row: color, name, location badge, remove */}
-      <div className="flex items-center gap-2">
-        <div
-          className="h-[10px] w-[10px] shrink-0 rounded-full"
-          style={{ backgroundColor: person.color }}
-        />
-        <input
-          value={person.label}
-          onChange={(e) => onUpdate({ ...person, label: e.target.value })}
-          className="h-7 w-20 bg-transparent text-[13px] font-semibold text-[#1D1D1F] focus:outline-none"
-          placeholder="Name"
-        />
-        {hasLocation && (
-          <button
-            onClick={() => onUpdate({ ...person, lat: 0, lng: 0 })}
-            className="ml-auto text-[11px] font-medium text-[#FF3B30] hover:text-[#D70015] transition-colors"
-          >
-            Reset
-          </button>
-        )}
-        {canRemove && (
-          <button
-            onClick={onRemove}
-            className="ml-auto flex h-5 w-5 items-center justify-center rounded-full bg-black/5 text-[#86868B] hover:bg-black/10 hover:text-[#FF3B30] transition-colors"
-          >
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        )}
-      </div>
+    <div className="relative rounded-md border border-[var(--rule)] bg-[var(--card)] overflow-hidden">
+      {/* Color stripe */}
+      <div className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ backgroundColor: person.color }} />
 
-      {/* Address input */}
-      <div className="relative mt-2">
-        <input
-          value={address}
-          onChange={(e) => handleAddressChange(e.target.value)}
-          placeholder="Search address or tap map..."
-          className="h-[36px] w-full rounded-lg border border-black/[0.06] bg-white px-3 text-[13px] text-[#1D1D1F] placeholder:text-[#86868B] focus:outline-none focus:ring-[3px] focus:ring-[#007AFF]/15 focus:border-[#007AFF]/40 transition-all"
-        />
-        {showSuggestions && suggestions.length > 0 && (
-          <div className="absolute z-20 mt-1 w-full rounded-xl border border-black/[0.06] bg-white shadow-lg shadow-black/8 overflow-hidden">
-            {suggestions.map((s, i) => (
-              <button
-                key={s.placeId}
-                className={`w-full px-3 py-2 text-left text-[13px] text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors ${
-                  i > 0 ? 'border-t border-black/[0.04]' : ''
-                }`}
-                onClick={() => handleSelectSuggestion(s)}
-              >
-                {s.description}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+      <div className="pl-3 pr-2.5 py-2.5">
+        {/* Top row: name + status */}
+        <div className="flex items-center gap-2">
+          <input
+            value={person.label}
+            onChange={(e) => onUpdate({ ...person, label: e.target.value })}
+            className="h-7 flex-1 min-w-0 bg-transparent text-[14px] font-semibold text-[var(--ink)] focus:outline-none placeholder:text-[var(--ink-muted)]"
+            placeholder="Name"
+          />
+          {hasLocation ? (
+            <span className="flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--good)]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[var(--good)]" />
+              SET
+            </span>
+          ) : (
+            <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--ink-muted)]">
+              EMPTY
+            </span>
+          )}
+          {hasLocation && (
+            <button
+              type="button"
+              onClick={() => onUpdate({ ...person, lat: 0, lng: 0 })}
+              className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--ink-muted)] hover:text-[var(--hot)] transition-colors"
+            >
+              Reset
+            </button>
+          )}
+          {canRemove && (
+            <button
+              type="button"
+              onClick={onRemove}
+              className="flex h-5 w-5 items-center justify-center text-[var(--ink-muted)] hover:text-[var(--hot)] transition-colors"
+              aria-label="Remove person"
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          )}
+        </div>
 
-      {/* Transport mode segmented control */}
-      <div className="mt-2 flex rounded-lg bg-black/[0.04] p-[2px]">
-        {MODES.map((m) => (
-          <button
-            key={m.value}
-            onClick={() => onUpdate({ ...person, mode: m.value })}
-            className={`flex h-[28px] flex-1 items-center justify-center gap-1 rounded-md text-[11px] font-medium transition-all ${
-              person.mode === m.value
-                ? 'bg-white text-[#1D1D1F] shadow-sm shadow-black/8'
-                : 'text-[#86868B] hover:text-[#1D1D1F]'
-            }`}
-          >
-            <span className="flex items-center justify-center text-[13px] leading-none">{MODE_ICONS[m.value]}</span>
-            <span className="hidden sm:inline">{m.label}</span>
-          </button>
-        ))}
+        {/* Address input */}
+        <div className="relative mt-2">
+          <input
+            value={address}
+            onChange={(e) => handleAddressChange(e.target.value)}
+            placeholder="Search address or tap the map…"
+            className="h-[40px] w-full rounded-sm border border-[var(--rule)] bg-[var(--paper)] px-3 text-[13px] text-[var(--ink)] placeholder:text-[var(--ink-muted)] focus:outline-none focus:border-[var(--ink)] focus:bg-[var(--paper-deep)]/40 transition-colors"
+          />
+          {showSuggestions && suggestions.length > 0 && (
+            <div className="absolute z-30 mt-1 w-full rounded-sm border border-[var(--ink)] bg-[var(--card)] shadow-[0_8px_24px_rgba(20,23,31,0.16)] overflow-hidden">
+              {suggestions.map((s, i) => (
+                <button
+                  key={s.placeId}
+                  type="button"
+                  className={`w-full px-3 py-2.5 text-left text-[13px] text-[var(--ink)] hover:bg-[var(--paper-deep)] transition-colors ${
+                    i > 0 ? 'border-t border-[var(--rule)]' : ''
+                  }`}
+                  onClick={() => handleSelectSuggestion(s)}
+                >
+                  {s.description}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Transport mode — editorial segmented */}
+        <div className="mt-2 grid grid-cols-4 border border-[var(--rule)] rounded-sm overflow-hidden">
+          {MODES.map((m, i) => (
+            <button
+              key={m.value}
+              type="button"
+              onClick={() => onUpdate({ ...person, mode: m.value })}
+              className={`flex h-[34px] items-center justify-center gap-1.5 text-[11px] font-mono uppercase tracking-[0.08em] transition-colors ${
+                i > 0 ? 'border-l border-[var(--rule)]' : ''
+              } ${
+                person.mode === m.value
+                  ? 'bg-[var(--ink)] text-[var(--paper)]'
+                  : 'bg-[var(--card)] text-[var(--ink-muted)] hover:text-[var(--ink)] hover:bg-[var(--paper-deep)]/50'
+              }`}
+            >
+              <span className="leading-none">{MODE_ICONS[m.value]}</span>
+              <span className="hidden xs:inline">{m.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
