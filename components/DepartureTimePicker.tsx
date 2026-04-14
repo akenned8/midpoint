@@ -1,14 +1,21 @@
 // When is the meetup? Quick presets + custom date/time
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 interface DepartureTimePickerProps {
   value: string;
   onChange: (value: string) => void;
 }
 
-function getPresets(): { label: string; value: string }[] {
+type Preset = { label: string; value: string };
+
+// Stable placeholder used for the first server + first client render.
+// Any time-dependent presets are added in a useEffect after mount so the
+// initial HTML matches and React doesn't trip on a hydration mismatch.
+const INITIAL_PRESETS: Preset[] = [{ label: 'Now', value: 'now' }];
+
+function computePresets(): Preset[] {
   const now = new Date();
   const today = new Date(now);
 
@@ -24,26 +31,26 @@ function getPresets(): { label: string; value: string }[] {
   saturday.setDate(saturday.getDate() + daysUntilSat);
   saturday.setHours(14, 0, 0, 0);
 
-  const presets: { label: string; value: string }[] = [
-    { label: 'Now', value: 'now' },
-  ];
+  const presets: Preset[] = [{ label: 'Now', value: 'now' }];
 
   if (now.getHours() < 19) {
     presets.push({ label: 'Tonight', value: tonight.toISOString() });
   }
-
   presets.push({ label: 'Tomorrow', value: tomorrow.toISOString() });
-
   if (daysUntilSat > 0 || now.getHours() < 14) {
     presets.push({ label: 'Saturday', value: saturday.toISOString() });
   }
-
   return presets;
 }
 
 export default function DepartureTimePicker({ value, onChange }: DepartureTimePickerProps) {
   const [showCustom, setShowCustom] = useState(false);
-  const presets = getPresets();
+  const [presets, setPresets] = useState<Preset[]>(INITIAL_PRESETS);
+
+  useEffect(() => {
+    setPresets(computePresets());
+  }, []);
+
   const isPreset = presets.some((p) => p.value === value) || value === 'now';
 
   const toLocalInput = (iso: string): string => {

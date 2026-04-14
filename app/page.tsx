@@ -17,9 +17,22 @@ const Map = dynamic(() => import('@/components/Map'), { ssr: false });
 
 const PERSON_COLORS = ['#007AFF', '#FF9500', '#34C759', '#FF2D55', '#5856D6', '#FF3B30'];
 
+// Stable seed IDs avoid hydration mismatches: crypto.randomUUID() inside
+// useState's initializer would generate different IDs on the server vs the
+// client and break React keys.
+function createSeedPerson(index: number): Person {
+  return {
+    id: `seed-${index}`,
+    label: `Person ${index + 1}`,
+    lat: 0, lng: 0,
+    mode: 'transit',
+    color: PERSON_COLORS[index % PERSON_COLORS.length],
+  };
+}
+
 function createPerson(index: number): Person {
   return {
-    id: crypto.randomUUID(),
+    id: typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `p-${Date.now()}-${index}`,
     label: `Person ${index + 1}`,
     lat: 0, lng: 0,
     mode: 'transit',
@@ -48,7 +61,7 @@ type SheetSnap = 'peek' | 'half' | 'full';
 const SNAP_HEIGHTS: Record<SheetSnap, number> = { peek: 196, half: 56, full: 94 };
 
 export default function Home() {
-  const [people, setPeople] = useState<Person[]>([createPerson(0), createPerson(1)]);
+  const [people, setPeople] = useState<Person[]>([createSeedPerson(0), createSeedPerson(1)]);
   const [alpha, setAlpha] = useState(0.7);
   const [departureTime, setDepartureTime] = useState('now');
   const [venues, setVenues] = useState<Venue[]>([]);
